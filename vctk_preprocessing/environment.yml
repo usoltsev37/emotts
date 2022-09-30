@@ -36,4 +36,4 @@ dependencies:
   - unzip=6.0
   - pip:
     - Montreal-Forced-Aligner==2.0.0b4
-    - tgt==1.4.4git push --set-upstream origin dev
+    - tgt==1.4.4
