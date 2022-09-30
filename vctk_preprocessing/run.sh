@@ -31,7 +31,7 @@ echo -e "\n3. Resampling"
 python src/preprocessing/resampling.py --input-dir $OUTPUT_DIR/processed/vctk/no_pause --output-dir $OUTPUT_DIR/processed/vctk/resampled --resample-rate 22050
 
 echo -e "\n4. Audio to Mel"
-python src/preprocessing/wav_to_mel.py --input-dir $OUTPUT_DIR/processed/vctk/resampled --output-dir $OUTPUT_DIR/vctk/processed/vctk/mels
+python src/preprocessing/wav_to_mel.py --input-dir $OUTPUT_DIR/processed/vctk/resampled --output-dir $OUTPUT_DIR/processed/vctk/mels
 
 echo -e "\n5. Text normalization"
 python src/preprocessing/text_normalization.py --input-dir $OUTPUT_DIR/raw/text --output-dir $OUTPUT_DIR/processed/vctk/mfa_inputs
