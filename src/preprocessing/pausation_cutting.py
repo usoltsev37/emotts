@@ -43,12 +43,10 @@ def main(input_dir: str, output_dir: str, audio_ext: str, target_sr: int) -> Non
     )
 
     (
-        _,  # get_speech_ts
         get_speech_ts_adaptive,
         save_audio,
         read_audio,
-        _,  # state_generator
-        _,  # single_audio_stream
+        _,  # VADIterator
         collect_chunks
     ) = utils
 
@@ -69,7 +67,7 @@ def main(input_dir: str, output_dir: str, audio_ext: str, target_sr: int) -> Non
 
     log_path = processed_path / "pausation_cutting.log"
     for filepath in tqdm(filepath_list):
-        wave_tensor = read_audio(filepath, target_sr=target_sr)
+        wave_tensor = read_audio(filepath, sampling_rate=target_sr)
         wave_resampled = resampler(wave_tensor)
         speech_timestamps = get_speech_ts_adaptive(wave_resampled, model)
         fixed_timestamps = align_timestamps(speech_timestamps, resample_fraction)

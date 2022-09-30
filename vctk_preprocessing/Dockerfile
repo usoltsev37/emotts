@@ -1,4 +1,4 @@
-FROM python:3.8-slim
+FROM python:3.9-slim
 
 WORKDIR /emotts
 
@@ -16,6 +16,8 @@ RUN source ~/.bashrc
 
 COPY environment.yml .
 RUN conda env create -f environment.yml
+COPY env.yml .
+RUN conda env create -f env.yml
 
 COPY run.sh .
 

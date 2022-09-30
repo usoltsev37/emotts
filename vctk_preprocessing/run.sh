@@ -1,39 +1,40 @@
 #!/bin/bash
 conda activate emotts
-cd repo
-
-SMALL_DATASET_ID=1vgRmRl4BNrcuVZKrpVL5OSmp34QqEby_
-FULL_DATASET_ID=1--fDFM0ZYsR6n4L3QWCSi8000GroORzf
-
-# Download dataset
-gdown --id $FULL_DATASET_ID --output vctk.zip
+cd repo/data
 
 export OUTPUT_DIR=data
 
 # Unzip dataset and reorganize folders
-unzip -q vctk.zip txt/* wav48_silence_trimmed/*
-mkdir -p $OUTPUT_DIR/zip
-mv vctk.zip $OUTPUT_DIR/zip
-mkdir -p $OUTPUT_DIR/raw/text
-mv txt/* $OUTPUT_DIR/raw/text
-mkdir -p $OUTPUT_DIR/raw/audio
-mv wav48_silence_trimmed/* $OUTPUT_DIR/raw/audio
+unzip -q zip/vctk.zip txt/* wav48_silence_trimmed/*
+
+mkdir -p raw/text
+mv txt/* raw/text
+mkdir -p raw/audio
+mv wav48_silence_trimmed/* raw/audio
 rm -rf txt wav48_silence_trimmed
 
+cd ..
+
 echo -e "\n1. Selecting only one mic per speaker"
-python src/preprocessing/preprocessing.py --input-dir $OUTPUT_DIR/raw/audio --output-dir $OUTPUT_DIR/processed/audio_single_mic --audio-ext flac
+python src/preprocessing/preprocessing.py --input-dir $OUTPUT_DIR/raw/audio --output-dir $OUTPUT_DIR/processed/vctk/audio_single_mic --audio-ext flac
+
+conda deactivate
+conda activate pausation
 
 echo -e "\n2. Pausation cutting with VAD"
-python src/preprocessing/pausation_cutting.py --input-dir $OUTPUT_DIR/processed/audio_single_mic --output-dir $OUTPUT_DIR/processed/no_pause --target-sr 48000
+python src/preprocessing/pausation_cutting.py --input-dir $OUTPUT_DIR/processed/vctk/audio_single_mic --output-dir $OUTPUT_DIR/processed/vctk/no_pause --target-sr 48000
+
+conda deactivate
+conda activate emotts
 
 echo -e "\n3. Resampling"
-python src/preprocessing/resampling.py --input-dir $OUTPUT_DIR/processed/no_pause --output-dir $OUTPUT_DIR/processed/resampled --resample-rate 22050
+python src/preprocessing/resampling.py --input-dir $OUTPUT_DIR/processed/vctk/no_pause --output-dir $OUTPUT_DIR/processed/vctk/resampled --resample-rate 22050
 
 echo -e "\n4. Audio to Mel"
-python src/preprocessing/wav_to_mel.py --input-dir $OUTPUT_DIR/processed/resampled --output-dir $OUTPUT_DIR/processed/mels
+python src/preprocessing/wav_to_mel.py --input-dir $OUTPUT_DIR/processed/vctk/resampled --output-dir $OUTPUT_DIR/vctk/processed/mels
 
 echo -e "\n5. Text normalization"
-python src/preprocessing/text_normalization.py --input-dir $OUTPUT_DIR/raw/text --output-dir $OUTPUT_DIR/processed/mfa_inputs
+python src/preprocessing/text_normalization.py --input-dir $OUTPUT_DIR/raw/text --output-dir $OUTPUT_DIR/processed/vctk/mfa_inputs
 
 echo -e "\n6. MFA Alignment setup"
 
@@ -47,15 +48,15 @@ conda deactivate
 conda activate emotts
 
 echo -e "\n7. MFA Preprocessing"
-python src/preprocessing/mfa_preprocessing.py --input-dir $OUTPUT_DIR/processed/resampled --output-dir $OUTPUT_DIR/processed/mfa_inputs
+python src/preprocessing/mfa_preprocessing.py --input-dir $OUTPUT_DIR/processed/vctk/resampled --output-dir $OUTPUT_DIR/processed/vctk/mfa_inputs
 
 # FINALLY, align phonemes and speech
 echo -e "\n8. MFA Alignment"
 echo $OUTPUT_DIR
 
-mfa align -t ./temp --clean -j 4 $OUTPUT_DIR/processed/mfa_inputs models/librispeech-lexicon.txt models/english.zip $OUTPUT_DIR/processed/mfa_outputs
+mfa align -t ./temp --clean -j 4 $OUTPUT_DIR/processed/vctk/mfa_inputs models/librispeech-lexicon.txt models/english.zip $OUTPUT_DIR/processed/vctk/mfa_outputs
 rm -rf temp
 
 echo -e "\n9. MFA Postprocessing"
 # Aggregate mels by speakers
-python src/preprocessing/mfa_postprocessing.py --input-dir $OUTPUT_DIR/processed/mels
+python src/preprocessing/mfa_postprocessing.py --input-dir $OUTPUT_DIR/processed/vctk/mels

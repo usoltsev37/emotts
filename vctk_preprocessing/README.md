@@ -1,5 +1,9 @@
 # VCTK Preprocessing
 
+## Data
+
+put [vckt](https://datashare.is.ed.ac.uk/bitstream/handle/10283/3443/VCTK-Corpus-0.92.zip) dataset to data/zip/vctk.zip 
+
 ## Prerequisites
 
 * Docker: 20.10.7
