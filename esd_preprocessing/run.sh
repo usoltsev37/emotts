@@ -21,7 +21,7 @@ echo -e "\n3. Resampling"
 python src/preprocessing/resampling.py --input-dir $OUTPUT_DIR/processed/esd/english/no_pause --output-dir $OUTPUT_DIR/processed/esd/english/resampled --resample-rate 22050 --audio-ext wav
 
 echo -e "\n4. Audio to Mel"
-python src/preprocessing/wav_to_mel.py --input-dir $OUTPUT_DIR/processed/esd/english/resampled --output-dir $OUTPUT_DIR/processed/esd/english/mels
+python src/preprocessing/wav_to_mel.py --input-dir $OUTPUT_DIR/processed/esd/english/resampled --output-dir $OUTPUT_DIR/processed/esd/english/mels  --audio-ext wav
 
 echo -e "\n5. Text normalization"
 python src/preprocessing/text_normalization.py --input-dir $OUTPUT_DIR/processed/esd/english/text --output-dir $OUTPUT_DIR/processed/esd/english/mfa_inputs
