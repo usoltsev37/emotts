@@ -6,8 +6,8 @@ export OUTPUT_DIR=data
 
 # Unzip dataset and reorganize folders
 
-[ -d "$OUTPUT_DIR/raw/" ] && rm -rf $OUTPUT_DIR/raw
-[ -d "$OUTPUT_DIR/processed/vctk" ] && rm -rf $OUTPUT_DIR/processed/vctk
+[ -d "raw/" ] && rm -rf raw/
+[ -d "processed/vctk/" ] && rm -rf processed/vctk/
 
 unzip -q zip/vctk.zip txt/* wav48_silence_trimmed/*
 

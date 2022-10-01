@@ -4,7 +4,7 @@ cd repo
 
 export OUTPUT_DIR=data
 
-[ -d "$OUTPUT_DIR/processed/esd" ] && rm -rf $OUTPUT_DIR/processed/esd
+[ -d "$OUTPUT_DIR/processed/esd/" ] && rm -rf $OUTPUT_DIR/processed/esd/
 
 echo -e "\n1. Extract from zip"
 python src/preprocessing/extract_esd.py --input-esd-zip $OUTPUT_DIR/zip/"Emotional Speech Dataset (ESD).zip" --output-dir $OUTPUT_DIR/processed/esd
