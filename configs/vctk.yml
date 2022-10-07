@@ -13,7 +13,7 @@ iters_per_checkpoint: 50000
 total_iterations: 500001
 finetune: false
 test_size: 0.05
-device: cuda:0
+device: cuda:1
 checkpoint_name: vctk
 data:
   text_dir: data/vctk/mfa_outputs
