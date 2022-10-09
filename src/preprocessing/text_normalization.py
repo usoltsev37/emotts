@@ -4,14 +4,16 @@ from pathlib import Path
 import click
 from text.cleaners import english_cleaners
 from tqdm import tqdm
-
+import subprocess as sub
 
 @click.command()
 @click.option("--input-dir", type=Path, required=True,
               help="Directory with texts to process.")
 @click.option("--output-dir", type=Path, required=True,
               help="Directory for normalized texts.")
-def main(input_dir: Path, output_dir: Path) -> None:
+@click.option("--language", type=click.Choice(['english', 'chinese'], case_sensitive=True), default="english",
+              help="choice language english/chinese")
+def main(input_dir: Path, output_dir: Path, language: str) -> None:
     output_dir.mkdir(exist_ok=True, parents=True)
 
     filepath_list = list(input_dir.rglob("*.txt"))
@@ -22,11 +24,14 @@ def main(input_dir: Path, output_dir: Path) -> None:
         new_dir = output_dir / filepath.parent.name
         new_dir.mkdir(exist_ok=True)
         new_file = new_dir / filepath.name
-
-        with open(filepath, "r") as fin, open(new_file, "w") as fout:
-            content = fin.read()
-            normalized_content = english_cleaners(content)
-            fout.write(normalized_content)
+        if language == "english":
+            with open(filepath, "r") as fin, open(new_file, "w") as fout:
+                content = fin.read()
+                normalized_content = english_cleaners(content)
+                fout.write(normalized_content)
+        if language == "chinese":
+            sub.run(["python", "src/preprocessing/text/cn_tn.py", filepath, new_file],stdout=sub.DEVNULL,
+    stderr=sub.STDOUT) 
 
     print("Finished successfully.")
     print(f"Processed files are located at {output_dir}")

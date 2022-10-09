@@ -10,9 +10,12 @@ put [esd](https://drive.google.com/file/d/1scuFwqh8s7KIYAfZW1Eu6088ZAK2SI-v/view
 
 ## Usage
 
-```bash
-docker build --rm --tag esd ./esd_preprocessing
-docker run --rm -it -v $(pwd):/emotts/repo esd
-```
 
-Processed data will be located at `data/esd/processed/mfa_outputs` (as `.TextGrid`, grouped by speaker IDs) and `data/esd/processed/mels` (as `.pkl`, grouped by speaker IDs).
+```bash
+docker build --rm --tag esd ./esd_preprocessing 
+docker run --env language=english --rm -it -v $(pwd):/emotts/repo esd #for english 
+docker run --env language=chinese --rm -it -v $(pwd):/emotts/repo esd  #for chinese 
+```
+## default language - english, for change on chinese, change in run.sh env variable - LANG
+
+Processed data will be located at `data/processed/esd/[lang]/mfa_outputs` (as `.TextGrid`, grouped by speaker IDs) and `data/processed/esd/[lang]/mels` (as `.pkl`, grouped by speaker IDs).

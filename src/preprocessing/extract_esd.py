@@ -44,13 +44,12 @@ bug_lines = ["0015_000217", "0015_000175", "0015_000138",
               help="Path to esd dataset in zip.")
 @click.option("--output-dir", type=Path, default="trimmed",
               help="outdir")
-def main(input_esd_zip: Path, output_dir: Path) -> None:
+@click.option("--language", type=click.Choice(['english', 'chinese'], case_sensitive=True), default="english",
+              help="choice language english/chinese")
+def main(input_esd_zip: Path, output_dir: Path, language: str) -> None:
+    output_dir = output_dir / Path(language)
     output_dir.mkdir(exist_ok=True, parents=True)
-    eng_output_dir = output_dir / Path("english")
-    chi_output_dir = output_dir / Path("chinese")
-
-    eng_output_dir.mkdir(exist_ok=True, parents=True)
-    chi_output_dir.mkdir(exist_ok=True, parents=True)
+    
 
     emmots_dict = {}
     pzf = PyZipFile(input_esd_zip)
@@ -59,22 +58,24 @@ def main(input_esd_zip: Path, output_dir: Path) -> None:
     print(basedir_with_data)
     for path_to_dir_speaker in basedir_with_data.iterdir():
         if path_to_dir_speaker.is_dir():
-            if int(path_to_dir_speaker.stem) > 10: # if indx speaker more then ten, that english speaker else chinese speaker
-                process_one_speacker(path_to_dir_speaker, eng_output_dir / Path("text"), eng_output_dir / Path("audio"), emmots_dict)
-            else:
-                process_one_speacker(path_to_dir_speaker, chi_output_dir / Path("text"), chi_output_dir / Path("audio"), emmots_dict)
+            if language == "english":
+                if int(path_to_dir_speaker.stem) > 10: # if indx speaker more then ten, that english speaker else chinese speaker
+                    process_one_speacker(path_to_dir_speaker, output_dir / Path("text"), output_dir / Path("audio"), emmots_dict)
+            if language == "chinese":
+                if int(path_to_dir_speaker.stem) <= 10:
+                    process_one_speacker(path_to_dir_speaker, output_dir / Path("text"), output_dir / Path("audio"), emmots_dict)
     
     shutil.rmtree(basedir_with_data)
-
-    for speaker_dir in (eng_output_dir / Path("text")).iterdir():
-        text_file = speaker_dir / Path(speaker_dir.stem + ".txt")
-        process_file_with_text(text_file, speaker_dir, encodings_eng)
-        os.remove(text_file)
-
-    for speaker_dir in (chi_output_dir / Path("text")).iterdir():
-        text_file = speaker_dir / Path(speaker_dir.stem + ".txt")
-        process_file_with_text(text_file, speaker_dir, encodings_chi)
-        os.remove(text_file)
+    if language == "english":
+        for speaker_dir in (output_dir / Path("text")).iterdir():
+            text_file = speaker_dir / Path(speaker_dir.stem + ".txt")
+            process_file_with_text(text_file, speaker_dir, encodings_eng)
+            os.remove(text_file)
+    if language == "chinese":
+        for speaker_dir in (output_dir / Path("text")).iterdir():
+            text_file = speaker_dir / Path(speaker_dir.stem + ".txt")
+            process_file_with_text(text_file, speaker_dir, encodings_chi)
+            os.remove(text_file)
 
 
 
