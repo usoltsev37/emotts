@@ -34,7 +34,7 @@ echo -e "\n6. MFA Alignment setup"
 # download a pretrained english acoustic model, and english lexicon
 mkdir -p models
 wget -q --show-progress https://github.com/lIkesimba9/FreeST_mfa_align/raw/main/model/freest.zip -P models
-wget -q --show-progress https://raw.githubusercontent.com/lIkesimba9/FreeST_mfa_align/main/pinyin-lexicon_with_tab.txt -P models
+wget -q --show-progress https://raw.githubusercontent.com/lIkesimba9/FreeST_mfa_align/main/model/pinyin-lexicon_with_tab.dict -P models
 
 conda env config vars set LD_LIBRARY_PATH=$CONDA_PREFIX/lib  # link to libopenblas
 conda deactivate
@@ -46,7 +46,7 @@ python src/preprocessing/mfa_preprocessing.py --input-dir $OUTPUT_DIR/processed/
 # FINALLY, align phonemes and speech
 echo -e "\n8. MFA Alignment"
 
-mfa align -t ./temp --clean -j 4 $OUTPUT_DIR/processed/freest/mfa_inputs models/pinyin-lexicon_with_tab.txt models/freest.zip $OUTPUT_DIR/processed/freest/mfa_outputs
+mfa align -t ./temp --clean -j 4 $OUTPUT_DIR/processed/freest/mfa_inputs models/pinyin-lexicon_with_tab.dict models/freest.zip $OUTPUT_DIR/processed/freest/mfa_outputs
 rm -rf temp
 
 echo -e "\n9. MFA Postprocessing"
