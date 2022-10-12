@@ -52,7 +52,7 @@ conda activate emotts
 echo -e "\n8. MFA Alignment"
 
 [ $language == "english" ] && mfa align -t ./temp --clean -j 4 $OUTPUT_DIR/processed/esd/$language/mfa_inputs models/librispeech-lexicon.txt models/english.zip $OUTPUT_DIR/processed/esd/$language/mfa_outputs
-[ $language == "chinese" ] && mfa align -t ./temp --clean -j 4 $OUTPUT_DIR/processed/esd/$language/mfa_inputs models/pinyin-lexicon_with_tab.dict models/mandarin_mfa.zip $OUTPUT_DIR/processed/esd/$language/mfa_outputs
+[ $language == "chinese" ] && mfa align -t ./temp --clean -j 4 $OUTPUT_DIR/processed/esd/$language/mfa_inputs models/pinyin-lexicon_with_tab.dict models/freest.zip $OUTPUT_DIR/processed/esd/$language/mfa_outputs
 
 rm -rf temp
 
