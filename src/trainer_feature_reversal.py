@@ -106,8 +106,8 @@ class Trainer:
                 base_model_path / FEATURE_MODEL_FILENAME, map_location="cpu"
             )
             feature_model.finetune = self.config.finetune
-            feature_model.encoder.requires_grad_ = False
-            feature_model.phonem_embedding.requires_grad_ = False
+            self.feature_model.encoder.requires_grad_(False)
+            self.feature_model.phonem_embedding.requires_grad_(False)
             self.mels_mean = torch.load(mapping_folder / MELS_MEAN_FILENAME)
             self.mels_std = torch.load(mapping_folder / MELS_STD_FILENAME)
 
