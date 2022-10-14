@@ -47,6 +47,7 @@ class TrainParams:
     checkpoint_name: str
     train_hifi: TrainParamsHiFi
     pretrained_hifi: str
+    lang: str = field(default="english")
     base_model: Optional[str] = field(default=None)
     finetune: bool = field(default=False)
     iters_per_checkpoint: int = field(default=10000)

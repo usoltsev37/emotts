@@ -13,14 +13,15 @@ iters_per_checkpoint: 50000
 total_iterations: 500001
 finetune: false
 test_size: 0.05
-device: cuda:1
+device: cuda:0
+lang: chinese
 checkpoint_name: freest
 data:
   text_dir: data/freest/mfa_outputs
   mels_dir: data/freest/mels
   wav_dir: data/freest/resampled
   feature_dir: data/freest/feature_output
-  finetune_speakers: [
+  finetune_speakers:
     - "0001"
     - "0002"
     - "0003"
@@ -31,7 +32,6 @@ data:
     - "0008"
     - "0009"
     - "0010"
-  ]
   ignore_speakers: [
 
   ]

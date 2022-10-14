@@ -15,7 +15,8 @@ from src.constants import (
     CHECKPOINT_DIR,
     FEATURE_CHECKPOINT_NAME,
     FEATURE_MODEL_FILENAME,
-    GENERATED_PHONEMES,
+    PHONEMES_ENG,
+    PHONEMES_CHI,
     LOG_DIR,
     MELS_MEAN_FILENAME,
     MELS_STD_FILENAME,
@@ -36,6 +37,7 @@ from src.models.feature_models.loss_function import NonAttentiveTacotronLoss
 from src.models.hifi_gan.models import Generator, load_model as load_hifi
 from src.train_config import TrainParams
 
+GENERATED_PHONEMES = []
 
 class Trainer:
 
@@ -57,7 +59,13 @@ class Trainer:
             base_model_path if self.config.finetune else self.checkpoint_path
         )
         self.log_dir = LOG_DIR / self.config.checkpoint_name / FEATURE_CHECKPOINT_NAME
-        self.references = list(REFERENCE_PATH.rglob("*.pkl"))
+        self.references = list( (REFERENCE_PATH / Path(self.config.lang)).rglob("*.pkl"))
+        
+        if self.config.lang == "english":
+            GENERATED_PHONEMES = PHONEMES_ENG
+        elif self.config.lang == "chinese":
+            GENERATED_PHONEMES = PHONEMES_CHI
+            
         self.create_dirs()
         self.phonemes_to_id: Dict[str, int] = {}
         self.speakers_to_id: Dict[str, int] = {}

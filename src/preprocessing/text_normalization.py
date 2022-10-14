@@ -31,7 +31,16 @@ def main(input_dir: Path, output_dir: Path, language: str) -> None:
                 fout.write(normalized_content)
         if language == "chinese":
             sub.run(["python", "src/preprocessing/text/cn_tn.py", filepath, new_file],stdout=sub.DEVNULL,
-    stderr=sub.STDOUT) 
+    stderr=sub.STDOUT)
+            data = open(new_file, 'r').read()
+            with open(new_file, 'w') as fin:
+                for i, sym in enumerate(data):
+                    if i == len(data) - 1:
+                        fin.write(sym)
+                    else:
+                        fin.write(sym + " ")
+
+
 
     print("Finished successfully.")
     print(f"Processed files are located at {output_dir}")

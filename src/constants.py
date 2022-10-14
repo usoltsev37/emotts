@@ -20,7 +20,7 @@ REFERENCE_PATH = Path("references")
 SPEAKER_PRINT_DIR = Path("speakers_prints")
 REMOVE_SPEAKERS = ["p280", "p315", "0019"]
 
-GENERATED_PHONEMES = [
+PHONEMES_ENG = [
     [
         "AY1",
         "K", "AE1", "N",
@@ -79,11 +79,26 @@ GENERATED_PHONEMES = [
         "AA1", "D",
     ],
     [
-        "DH", "AE1", "T"
+        "DH", "AE1", "T",
         "IH1", "S",
         "IH0", "N", "S", "EY1", "N",
     ]
 ]
+
+PHONEMES_CHI = [
+    ['qing1', 'chu1', 'yu2', 'lan2', 'er2', 'sheng4', 'yu2', 'lan2'],
+    ['tian1', 'dao4', 'chou2', 'qin2'],
+    ['jiu3', 'tian1', 'lan3', 'yue4'],
+    ['sai1', 'weng1', 'shi1', 'ma3', '，', 'yan1', 'zhi1', 'fei1', 'fu2'],
+    ['yi1', 'ming2', 'jing1', 'ren2'],
+    ['yi1', 'si1', 'bu4', 'gou3'],
+    ['yi1', 'jian4', 'shuang1', 'diao1'],
+    ['shan1', 'yu3', 'yu4', 'lai2', 'feng1', 'man3', 'lou2'],
+    ['ma2', 'que4', 'sui1', 'xiao3', '，', 'wu3', 'zang4', 'ju4', 'quan2'],
+    ['qiang2', 'long2', 'nan2', 'ya1', 'di4', 'tou2', 'she2'],
+    ['qian2', 'pa4', 'lang2', 'hou4', 'pa4', 'hu3'],
+    ['da4', 'zhi4', 'ruo4', 'yu2']
+ ]
 
 RUSSIAN_SPEAKERS = {0: "Игорина"}
 try:
