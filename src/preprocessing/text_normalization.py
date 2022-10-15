@@ -5,6 +5,8 @@ import click
 from text.cleaners import english_cleaners
 from tqdm import tqdm
 import subprocess as sub
+from pypinyin import pinyin, Style
+import pypinyin
 
 @click.command()
 @click.option("--input-dir", type=Path, required=True,
@@ -36,9 +38,9 @@ def main(input_dir: Path, output_dir: Path, language: str) -> None:
             with open(new_file, 'w') as fin:
                 for i, sym in enumerate(data):
                     if i == len(data) - 1:
-                        fin.write(sym)
+                        fin.write(pinyin(sym, style=Style.TONE3, neutral_tone_with_five=True)[0][0])
                     else:
-                        fin.write(sym + " ")
+                        fin.write(pinyin(sym, style=Style.TONE3, neutral_tone_with_five=True)[0][0] + " ")
 
 
 

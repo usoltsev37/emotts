@@ -24,6 +24,9 @@ python src/preprocessing/resampling.py --input-dir $OUTPUT_DIR/processed/esd/$la
 echo -e "\n4. Audio to Mel"
 python src/preprocessing/wav_to_mel.py --input-dir $OUTPUT_DIR/processed/esd/$language/resampled --output-dir $OUTPUT_DIR/processed/esd/$language/mels  --audio-ext wav
 
+[ -d "$OUTPUT_DIR/processed/esd/mfa_inputs/" ] && rm -rf $OUTPUT_DIR/processed/esd/chinese/mfa_inputs/
+[ -d "$OUTPUT_DIR/processed/esd/mfa_outputs/" ] && rm -rf $OUTPUT_DIR/processed/esd/chinese/mfa_outputs/
+
 echo -e "\n5. Text normalization"
 python src/preprocessing/text_normalization.py --input-dir $OUTPUT_DIR/processed/esd/$language/text --output-dir $OUTPUT_DIR/processed/esd/$language/mfa_inputs --language $language 
 
