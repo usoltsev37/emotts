@@ -52,9 +52,10 @@ conda env config vars set LD_LIBRARY_PATH=$CONDA_PREFIX/lib  # link to libopenbl
 conda deactivate
 conda activate emotts
 # FINALLY, align phonemes and speech
+
 echo -e "\n8. MFA Alignment"
 
-[ $language == "english" ] && mfa align -t ./temp --clean -j 4 $OUTPUT_DIR/processed/esd/$language/mfa_inputs models/librispeech-lexicon.txt models/english.zip $OUTPUT_DIR/processed/esd/$language/mfa_outputs
+[ $language == "english" ] && mfa align -t ./temp --clean -j 4 $OUTPUT_DIR/processed/esd/$language/mfa_inputs models/librispeech-lexicon_with_tab.txt models/english.zip $OUTPUT_DIR/processed/esd/$language/mfa_outputs
 [ $language == "chinese" ] && mfa align -t ./temp --clean -j 4 $OUTPUT_DIR/processed/esd/$language/mfa_inputs models/pinyin-lexicon_with_tab.dict models/freest.zip $OUTPUT_DIR/processed/esd/$language/mfa_outputs
 
 rm -rf temp
@@ -62,3 +63,8 @@ rm -rf temp
 echo -e "\n9. MFA Postprocessing"
 # Aggregate mels by speakers
 python src/preprocessing/mfa_postprocessing.py --input-dir $OUTPUT_DIR/processed/esd/$language/mels
+
+
+echo -e "\n9. Compute pitch, mels, energy, duration for fastspeech2"
+
+python src/preprocessing/enrgy_mel_pitch_for_fastspeech2.py --input-audio-dir $OUTPUT_DIR/processed/esd/$language/resampled --input-textgrid-dir $OUTPUT_DIR/processed/esd/$language/mfa_outputs  --output-dir $OUTPUT_DIR/processed/esd/$language/fastspeech2 --audio-ext wav

@@ -54,3 +54,7 @@ rm -rf temp
 echo -e "\n9. MFA Postprocessing"
 # Aggregate mels by speakers
 python src/preprocessing/mfa_postprocessing.py --input-dir $OUTPUT_DIR/processed/freest/mels
+
+echo -e "\n9. Compute pitch, mels, energy, duration for fastspeech2"
+
+python src/preprocessing/enrgy_mel_pitch_for_fastspeech2.py --input-audio-dir $OUTPUT_DIR/processed/freest/resampled --input-textgrid-dir $OUTPUT_DIR/processed/freest/mfa_outputs  --output-dir $OUTPUT_DIR/processed/freest/fastspeech2 --audio-ext wav
