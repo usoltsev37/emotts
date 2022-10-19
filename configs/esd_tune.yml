@@ -20,6 +20,11 @@ data:
   mels_dir: data/esd/mels
   wav_dir: data/esd/resampled
   feature_dir: data/esd/feature_output
+  mels_fastspeech2_dir: data/processed/esd/english/fastspeech2/mels
+  duration_dir: data/processed/esd/english/fastspeech2/duration
+  pitch_dir: data/processed/esd/english/fastspeech2/pitch
+  energy_dir: data/processed/esd/english/fastspeech2/energy
+  phones_dir: data/processed/esd/english/fastspeech2/phones
   ignore_speakers: []
 pretrained_hifi: models/en/hifi
 base_model: models/en/tacotron

@@ -3,7 +3,7 @@ conda activate emotts
 cd repo
 
 export OUTPUT_DIR=data
-
+: '
 [ -d "$OUTPUT_DIR/processed/esd/" ] && rm -rf $OUTPUT_DIR/processed/esd/
 
 echo -e "\n1. Extract from zip"
@@ -63,7 +63,7 @@ rm -rf temp
 echo -e "\n9. MFA Postprocessing"
 # Aggregate mels by speakers
 python src/preprocessing/mfa_postprocessing.py --input-dir $OUTPUT_DIR/processed/esd/$language/mels
-
+'
 
 echo -e "\n9. Compute pitch, mels, energy, duration for fastspeech2"
 

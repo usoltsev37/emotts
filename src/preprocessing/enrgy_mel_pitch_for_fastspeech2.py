@@ -60,22 +60,25 @@ def main(input_audio_dir: Path, input_textgrid_dir: Path, output_dir: Path, audi
     for tg_path in tqdm(textgrid_collection):
         audio_path = input_audio_dir / Path(tg_path.parent.stem) /  Path(tg_path.stem + f".{audio_ext}")
         
-        duration_tensor, pitch_tensor, energy_tensor, mel_spectrogram = process_utterance(audio_path, tg_path, stft)
+        phones, duration, pitch, energy, mel_spectrogram = process_utterance(audio_path, tg_path, stft)
         # [size],           [size] [size]  [n_mels x time]
         new_mel_path = output_dir / Path("mels") / Path(tg_path.parent.stem)
         new_pitch_path = output_dir / Path("pitch") / Path(tg_path.parent.stem)
         new_energy_path = output_dir / Path("energy") / Path(tg_path.parent.stem)
         new_duration_path = output_dir / Path("duration") / Path(tg_path.parent.stem)
+        new_phones_path = output_dir / Path("phones") / Path(tg_path.parent.stem)
         
         new_mel_path.mkdir(exist_ok=True, parents=True)
         new_pitch_path.mkdir(exist_ok=True, parents=True)
         new_energy_path.mkdir(exist_ok=True, parents=True)
         new_duration_path.mkdir(exist_ok=True, parents=True)
+        new_phones_path.mkdir(exist_ok=True, parents=True)
 
-        torch.save(mel_spectrogram, (new_mel_path / tg_path.stem).with_suffix(".pkl"))
-        torch.save(energy_tensor, (new_energy_path / tg_path.stem).with_suffix(".pkl"))
-        torch.save(pitch_tensor, (new_pitch_path / tg_path.stem).with_suffix(".pkl"))
-        torch.save(duration_tensor, (new_duration_path / tg_path.stem).with_suffix(".pkl"))
+        np.save((new_duration_path / tg_path.stem).with_suffix(".npy"), duration)
+        np.save((new_pitch_path / tg_path.stem).with_suffix(".npy"), pitch)
+        np.save((new_energy_path / tg_path.stem).with_suffix(".npy"), energy)
+        np.save((new_mel_path / tg_path.stem).with_suffix(".npy"), mel_spectrogram)
+        open((new_phones_path / tg_path.stem).with_suffix(".txt"), 'wt').write((" ".join(phones)).rstrip())
 
     print("Finished successfully.")
     print(f"Processed files are located at {output_dir}")
@@ -83,9 +86,9 @@ def main(input_audio_dir: Path, input_textgrid_dir: Path, output_dir: Path, audi
 
 def process_utterance(audio_path: Path, textgrid_path: Path,
     stft: Audio.stft.TacotronSTFT
-):
+) -> Tuple[List, List, List, List]:
     textgrid = tgt.io.read_textgrid(textgrid_path)
-    duration_collecton, start_time, end_time = get_alignment(
+    phone_collection, duration_collecton, start_time, end_time = get_alignment(
         textgrid.get_tier_by_name("phones")
     )
 
@@ -148,7 +151,7 @@ def process_utterance(audio_path: Path, textgrid_path: Path,
         pos += d
     energy = energy[: len(duration_collecton)]
 
-    return torch.Tensor(duration_collecton), torch.from_numpy(pitch), torch.from_numpy(energy), torch.from_numpy(mel_spectrogram)
+    return phone_collection, duration_collecton, pitch, energy, mel_spectrogram
 
 def get_alignment(tier: tgt.core.TextGrid) -> Tuple[List, float, float]:
     sil_phones = ["sil", "sp", "spn"]
@@ -187,7 +190,7 @@ def get_alignment(tier: tgt.core.TextGrid) -> Tuple[List, float, float]:
     phone_collection = phone_collection[:end_idx]
     duration_collecton = duration_collecton[:end_idx]
 
-    return duration_collecton, start_time_result, end_time_result    
+    return phone_collection, duration_collecton, start_time_result, end_time_result    
 
 if __name__ == "__main__":
     main()

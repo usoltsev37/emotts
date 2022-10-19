@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Union
 
 import numpy as np
-import tgt
 import torch
 from torch.utils.data import Dataset
 from tqdm import tqdm
@@ -19,43 +18,57 @@ PAD_TOKEN = "<PAD>"
 
 
 @dataclass
-class RegularSample:
+class FastSpeech2Sample:
 
     phonemes: List[int]
     num_phonemes: int
     speaker_id: int
-    durations: np.ndarray
-    mels: torch.Tensor
+    duration: np.array
+    mel: torch.Tensor
+    energy: np.array
+    pitch: np.array
+
 
 
 @dataclass
-class RegularInfo:
+class FastSpeech2Info:
 
-    text_path: Path
+    phonemes_path: Path
     mel_path: Path
+    energy_path: Path
+    duration_path: Path
+    pitch_path: Path
     speaker_id: int
     phonemes_length: int
 
 
 @dataclass
-class RegularBatch:
-
+class FastSpeech2Batch:
+    
+    speaker_ids: torch.Tensor
     phonemes: torch.Tensor
     num_phonemes: torch.Tensor
-    speaker_ids: torch.Tensor
-    durations: torch.Tensor
+    max_phonemes_len: int
     mels: torch.Tensor
+    max_mels_len: int
+    energies: torch.Tensor
+    pitches: torch.Tensor
+    durations: torch.Tensor
 
 
-class RegularDataset(Dataset[RegularSample]):
+class FastSpeech2Dataset(Dataset[FastSpeech2Sample]):
     def __init__(
         self,
         sample_rate: int,
         hop_size: int,
         mels_mean: torch.Tensor,
         mels_std: torch.Tensor,
+        energy_mean: float,
+        energy_std: float,
+        pitch_mean: float,
+        pitch_std: float,
         phoneme_to_ids: Dict[str, int],
-        data: List[RegularInfo],
+        data: List[FastSpeech2Info],
     ):
         self._phoneme_to_id = phoneme_to_ids
         self._dataset = data
@@ -64,51 +77,45 @@ class RegularDataset(Dataset[RegularSample]):
         self.hop_size = hop_size
         self.mels_mean = mels_mean
         self.mels_std = mels_std
+        self.energy_mean=energy_mean,
+        self.energy_std=energy_std,
+        self.pitch_mean=pitch_mean,
+        self.pitch_std=pitch_std,
 
     def __len__(self) -> int:
         return len(self._dataset)
 
-    def __getitem__(self, idx: int) -> RegularSample:
+    def __getitem__(self, idx: int) -> FastSpeech2Sample:
 
         info = self._dataset[idx]
-        text_grid = tgt.read_textgrid(info.text_path)
-        phones_tier = text_grid.get_tier_by_name(PHONES_TIER)
+        phoneme_collection = open(info.phonemes_path).read().split(" ")
         phoneme_ids = [
-            self._phoneme_to_id[x.text] for x in phones_tier.get_copy_with_gaps_filled()
+            self._phoneme_to_id[phoneme] for phoneme in phoneme_collection
         ]
 
-        durations = np.array(
-            [
-                self.seconds_to_frame(x.duration())
-                for x in phones_tier.get_copy_with_gaps_filled()
-            ],
-            dtype=np.float32,
-        )
+        duration: np.array = np.load(info.duration_path)
 
-        mels: torch.Tensor = torch.load(info.mel_path)
+        mels: torch.Tensor = torch.Tensor(np.load(info.mel_path))
         mels = (mels - self.mels_mean) / self.mels_std
+        energy = np.load(info.energy_path)
+        energy = (energy - self.energy_mean) / self.energy_std
+        pitch = np.load(info.pitch_path)
+        pitch = (pitch - self.pitch_mean) / self.pitch_std
 
-        pad_size = mels.shape[-1] - np.int64(durations.sum())
-        if pad_size < 0:
-            durations[-1] += pad_size
-            assert durations[-1] >= 0
-        if pad_size > 0:
-            phoneme_ids.append(self._phoneme_to_id[PAD_TOKEN])
-            np.append(durations, pad_size)
 
-        return RegularSample(
+        return FastSpeech2Sample(
             phonemes=phoneme_ids,
             num_phonemes=len(phoneme_ids),
             speaker_id=info.speaker_id,
-            mels=mels,
-            durations=durations,
+            mel=mels,
+            duration=duration,
+            energy=energy,
+            pitch=pitch
         )
 
-    def seconds_to_frame(self, seconds: float) -> float:
-        return seconds * self.sample_rate / self.hop_size
 
 
-class RegularFactory:
+class FastSpeech2Factory:
 
     """Create VCTK Dataset
 
@@ -151,10 +158,13 @@ class RegularFactory:
         self.hop_size = hop_size
         self.n_mels = n_mels
         self.finetune = finetune
-        self._mels_dir = Path(config.mels_dir)
-        self._text_dir = Path(config.text_dir)
-        self._text_ext = config.text_ext
-        self._mels_ext = config.mels_ext
+        self._mels_dir = Path(config.mels_fastspeech2_dir)
+        self._pitch_dir = Path(config.pitch_dir)
+        self._phones_dir = Path(config.phones_dir)
+        self._energy_dir = Path(config.energy_dir)
+        self._duration_dir = Path(config.duration_dir)
+        self._fastspeech2_ext = config.fastspeech2_ext
+        self._phones_ext = config.phones_ext
         self.phoneme_to_id: Dict[str, int] = phonemes_to_id
         self.phoneme_to_id[PAD_TOKEN] = 0
         self.speaker_to_id: Dict[str, int] = speakers_to_id
@@ -167,8 +177,10 @@ class RegularFactory:
                 for speaker in self._mels_dir.iterdir()
                 if speaker not in config.finetune_speakers
             ]
-        self._dataset: List[RegularInfo] = self._build_dataset()
-        self.mels_mean, self.mels_std = self._get_mean_and_std()
+        self._dataset: List[FastSpeech2Info] = self._build_dataset()
+        self.mels_mean, self.mels_std = self._get_mean_and_std_mels()
+        self.energy_mean, self.energy_std = self._get_mean_and_std_scalar(self._energy_dir, self._fastspeech2_ext)
+        self.pitch_mean, self.pitch_std = self._get_mean_and_std_scalar(self._pitch_dir, self._fastspeech2_ext)
 
     @staticmethod
     def add_to_mapping(mapping: Dict[str, int], token: str) -> None:
@@ -177,7 +189,7 @@ class RegularFactory:
 
     def split_train_valid(
         self, test_fraction: float
-    ) -> Tuple[RegularDataset, RegularDataset]:
+    ) -> Tuple[FastSpeech2Dataset, FastSpeech2Dataset]:
         speakers_to_data_id: Dict[int, List[int]] = defaultdict(list)
         ignore_speaker_ids = {
             self.speaker_to_id[speaker] for speaker in self.ignore_speakers
@@ -198,79 +210,100 @@ class RegularFactory:
                 test_data.append(self._dataset[i])
             else:
                 train_data.append(self._dataset[i])
-        train_dataset = RegularDataset(
+        train_dataset = FastSpeech2Dataset(
             sample_rate=self.sample_rate,
             hop_size=self.hop_size,
             mels_mean=self.mels_mean,
             mels_std=self.mels_std,
+            energy_mean=self.energy_mean,
+            energy_std=self.energy_std,
+            pitch_mean=self.pitch_mean,
+            pitch_std=self.pitch_std,
             phoneme_to_ids=self.phoneme_to_id,
             data=train_data,
         )
-        test_dataset = RegularDataset(
+        test_dataset = FastSpeech2Dataset(
             sample_rate=self.sample_rate,
             hop_size=self.hop_size,
             mels_mean=self.mels_mean,
             mels_std=self.mels_std,
+            energy_mean=self.energy_mean,
+            energy_std=self.energy_std,
+            pitch_mean=self.pitch_mean,
+            pitch_std=self.pitch_std,
             phoneme_to_ids=self.phoneme_to_id,
             data=test_data,
         )
         return train_dataset, test_dataset
 
-    def _build_dataset(self) -> List[RegularInfo]:
+    def _build_dataset(self) -> List[FastSpeech2Info]:
 
-        dataset: List[RegularInfo] = []
-        texts_set = {
-            Path(x.parent.name) / x.stem
-            for x in self._text_dir.rglob(f"*{self._text_ext}")
-        }
+        dataset: List[FastSpeech2Info] = []
         mels_set = {
             Path(x.parent.name) / x.stem
-            for x in self._mels_dir.rglob(f"*{self._mels_ext}")
+            for x in self._mels_dir.rglob(f"*{self._fastspeech2_ext}")
         }
-        samples = list(mels_set & texts_set)
+        enegry_set = {
+            Path(x.parent.name) / x.stem
+            for x in self._energy_dir.rglob(f"*{self._fastspeech2_ext}")
+        }
+        pitch_set = {
+            Path(x.parent.name) / x.stem
+            for x in self._pitch_dir.rglob(f"*{self._fastspeech2_ext}")
+        }
+        duration_set = {
+            Path(x.parent.name) / x.stem
+            for x in self._duration_dir.rglob(f"*{self._fastspeech2_ext}")
+        }
+        phones_set = {
+            Path(x.parent.name) / x.stem
+            for x in self._phones_dir.rglob(f"*{self._phones_ext}")
+        }           
+        samples = list(mels_set & duration_set & pitch_set & enegry_set & phones_set)
         for sample in tqdm(samples):
             if sample.parent.name in REMOVE_SPEAKERS:
                 continue
 
-            tg_path = (self._text_dir / sample).with_suffix(self._text_ext)
-            mels_path = (self._mels_dir / sample).with_suffix(self._mels_ext)
-
-            text_grid = tgt.read_textgrid(tg_path)
+            mels_path = (self._mels_dir / sample).with_suffix(self._fastspeech2_ext)
+            energy_path = (self._energy_dir / sample).with_suffix(self._fastspeech2_ext)
+            pitch_path = (self._pitch_dir / sample).with_suffix(self._fastspeech2_ext)
+            duration_path = (self._duration_dir / sample).with_suffix(self._fastspeech2_ext)
+            phonemes_path = (self._phones_dir / sample).with_suffix(self._phones_ext)
             self.add_to_mapping(self.speaker_to_id, sample.parent.name)
+            
             speaker_id = self.speaker_to_id[sample.parent.name]
-
-            if PHONES_TIER in text_grid.get_tier_names():
-
-                phones_tier = text_grid.get_tier_by_name(PHONES_TIER)
-                phonemes = [x.text for x in phones_tier.get_copy_with_gaps_filled()]
+            phonemes = open(phonemes_path).read().split(" ")
+            if len(phonemes) > 0:
 
                 for phoneme in phonemes:
                     self.add_to_mapping(self.phoneme_to_id, phoneme)
 
                 if sample.parent.name in self.speaker_to_use:
-
                     dataset.append(
-                        RegularInfo(
-                            text_path=tg_path,
-                            mel_path=mels_path,
+                        FastSpeech2Info(
                             phonemes_length=len(phonemes),
-                            speaker_id=speaker_id,
+                            phonemes_path=phonemes_path,
+                            energy_path=energy_path,
+                            duration_path=duration_path,
+                            pitch_path=pitch_path,
+                            mel_path=mels_path,
+                            speaker_id=speaker_id
                         )
                     )
 
         return dataset
 
-    def _get_mean_and_std(self) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _get_mean_and_std_mels(self) -> Tuple[torch.Tensor, torch.Tensor]:
         mel_sum = torch.zeros(self.n_mels, dtype=torch.float64)
         mel_squared_sum = torch.zeros(self.n_mels, dtype=torch.float64)
         counts = 0
 
-        for mel_path in self._mels_dir.rglob(f"*{self._mels_ext}"):
+        for mel_path in self._mels_dir.rglob(f"*{self._fastspeech2_ext}"):
             if mel_path.parent.name in REMOVE_SPEAKERS:
                 continue
-            mels: torch.Tensor = torch.load(mel_path)
-            mel_sum += mels.sum(dim=-1).squeeze(0)
-            mel_squared_sum += (mels ** 2).sum(dim=-1).squeeze(0)
+            mels: torch.Tensor = torch.Tensor(np.load(mel_path))
+            mel_sum += mels.sum(dim=-1)
+            mel_squared_sum += (mels ** 2).sum(dim=-1)
             counts += mels.shape[-1]
 
         mels_mean: torch.Tensor = mel_sum / counts
@@ -279,9 +312,31 @@ class RegularFactory:
         )
 
         return mels_mean.view(-1, 1), mels_std.view(-1, 1)
+    
+    def _get_mean_and_std_scalar(self, scalars_path: Path, scalar_exts: str) -> Tuple[float, float]:
+        scalar_sum = 0.0
+        scalar_squared_sum = 0.0
+        counts = 0
+
+        for scalar_path in scalars_path.rglob(f"*{scalar_exts}"):
+            if scalar_path.parent.name in REMOVE_SPEAKERS:
+                continue
+            scalar: torch.Tensor = torch.Tensor(np.load(scalar_path))
+            scalar_sum += scalar.sum(dim=-1)
+            scalar_squared_sum += (scalar ** 2).sum(dim=-1)
+            counts += scalar.shape[-1]
+
+        scalar_mean: torch.Tensor = scalar_sum / counts
+        scalar_std: torch.Tensor = torch.sqrt(
+            (scalar_squared_sum - scalar_sum * scalar_sum / counts) / counts
+        )
+
+        return scalar_mean, scalar_std
 
 
-class RegularCollate:
+
+
+class FastSpeech2Collate:
     """
     Zero-pads model inputs and targets based on number of frames per setep
     """
@@ -289,7 +344,7 @@ class RegularCollate:
     def __init__(self, n_frames_per_step: int = 1):
         self.n_frames_per_step = n_frames_per_step
 
-    def __call__(self, batch: List[RegularSample]) -> RegularBatch:
+    def __call__(self, batch: List[FastSpeech2Sample]) -> FastSpeech2Batch:
         """Collate's training batch from normalized text and mel-spectrogram
         PARAMS
         ------
@@ -308,28 +363,40 @@ class RegularCollate:
 
         text_padded = torch.zeros((batch_size, max_input_len), dtype=torch.long)
         durations_padded = torch.zeros((batch_size, max_input_len), dtype=torch.float)
+        energy_padded = torch.zeros((batch_size, max_input_len), dtype=torch.float)
+        pitch_padded = torch.zeros((batch_size, max_input_len), dtype=torch.float)
+        
         for i, idx in enumerate(ids_sorted_decreasing):
             text = batch[idx].phonemes
             text_padded[i, : len(text)] = torch.LongTensor(text)
-            durations = batch[idx].durations
+            durations = batch[idx].duration
             durations_padded[i, : len(durations)] = torch.FloatTensor(durations)
+            energy = batch[idx].energy
+            energy_padded[i, : len(energy)] = torch.FloatTensor(energy)
+            pitch = batch[idx].pitch
+            pitch_padded[i, : len(pitch)] = torch.FloatTensor(pitch)
 
-        num_mels = batch[0].mels.squeeze(0).size(0)
-        max_target_len = max([x.mels.squeeze(0).size(1) for x in batch])
+        num_mels = batch[0].mel.size(0)
+        max_target_len = max([x.mel.size(1) for x in batch])
+
 
         # include mel padded and gate padded
         mel_padded = torch.zeros(
             (batch_size, num_mels, max_target_len), dtype=torch.float
         )
         for i, idx in enumerate(ids_sorted_decreasing):
-            mel: torch.Tensor = batch[idx].mels.squeeze(0)
+            mel: torch.Tensor = batch[idx].mel
             mel_padded[i, :, : mel.shape[1]] = mel
         mel_padded = mel_padded.permute(0, 2, 1)
 
-        return RegularBatch(
+        return FastSpeech2Batch(
+            speaker_ids=input_speaker_ids,
             phonemes=text_padded,
             num_phonemes=input_lengths,
-            speaker_ids=input_speaker_ids,
-            durations=durations_padded,
+            max_phonemes_len=max_input_len,
             mels=mel_padded,
+            max_mels_len=max_target_len,
+            energies=energy_padded,
+            pitches=pitch_padded,
+            durations=durations_padded,
         )
