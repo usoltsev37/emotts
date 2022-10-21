@@ -8,22 +8,57 @@ n_mels: 80
 seed: 42
 batch_size: 16
 grad_clip_thresh: 1.0
-log_steps: 10
-iters_per_checkpoint: 10
+log_steps: 1000
+iters_per_checkpoint: 50000
 total_iterations: 500001
-test_size: 0.05
 finetune: false
+test_size: 0.05
 device: cuda:0
-checkpoint_name: esd_test
-base_model: models/en/tacotron
+checkpoint_name: vctk
 data:
-  text_dir: data/esd_vctk/mfa_outputs
-  mels_dir: data/esd_vctk/mels
-  wav_dir: data/esd_vctk/resampled
-  feature_dir: data/esd_vctk/feature_output
-  speaker_emb_dir: data/esd_vctk/speaker_embs
+  text_dir: data/esd/mfa_outputs
+  mels_dir: data/esd/mels
+  wav_dir: data/esd/resampled
+  feature_dir: data/esd/feature_output
+  mels_fastspeech2_dir: data/processed/esd/english/fastspeech2/mels
+  duration_dir: data/processed/esd/english/fastspeech2/duration
+  pitch_dir: data/processed/esd/english/fastspeech2/pitch
+  energy_dir: data/processed/esd/english/fastspeech2/energy
+  phones_dir: data/processed/esd/english/fastspeech2/phones
   ignore_speakers: []
 pretrained_hifi: models/en/hifi
+base_model: models/en/tacotron
+fastspeech2:
+  encoder_params:
+    conv_filter_size: 1024
+    conv_kernel_size:
+      - 9
+      - 1
+    encoder_layer: 6
+    encoder_head: 2
+    encoder_hidden: 256
+    encoder_dropout: 0.2
+  decoder_params:
+    conv_filter_size: 1024
+    conv_kernel_size:
+      - 9
+      - 1
+    decoder_layer: 6
+    decoder_head: 2
+    decoder_hidden: 256
+    decoder_dropout: 0.2
+  variance_adapter_params:
+    predictor_params:
+      filter_size: 256
+      kernel_size: 3
+      dropout: 0.5
+    embedding_params:
+      n_bins: 256
+      pitch_quantization: linear
+      energy_quantization: linear
+  max_seq_len: 1000
+
+
 train_hifi:
   split_data: true
   training_epochs: 1000
@@ -61,10 +96,10 @@ train_hifi:
     resblock_initial_channel: 256
   segment_size: 8192
 loss:
+  is_reversal: false
   mels_weight: 1.0
   duration_weight: 2.0
   adversarial_weight: 0.1
-  is_reversal: false
 optimizer:
   learning_rate: 0.001
   adam_beta1: 0.9
@@ -127,3 +162,4 @@ model:
   mask_padding: true
   phonem_embedding_dim: 512
   speaker_embedding_dim: 256
+

@@ -28,6 +28,37 @@ data:
   ignore_speakers: []
 pretrained_hifi: models/en/hifi
 base_model: models/en/tacotron
+fastspeech2:
+  encoder_params:
+    conv_filter_size: 1024
+    conv_kernel_size:
+      - 9
+      - 1
+    encoder_layer: 6
+    encoder_head: 2
+    encoder_hidden: 256
+    encoder_dropout: 0.2
+  decoder_params:
+    conv_filter_size: 1024
+    conv_kernel_size:
+      - 9
+      - 1
+    decoder_layer: 6
+    decoder_head: 2
+    decoder_hidden: 256
+    decoder_dropout: 0.2
+  variance_adapter_params:
+    predictor_params:
+      filter_size: 256
+      kernel_size: 3
+      dropout: 0.5
+    embedding_params:
+      n_bins: 256
+      pitch_quantization: linear
+      energy_quantization: linear
+  max_seq_len: 1000
+
+
 train_hifi:
   split_data: true
   training_epochs: 1000
@@ -131,3 +162,4 @@ model:
   mask_padding: true
   phonem_embedding_dim: 512
   speaker_embedding_dim: 256
+

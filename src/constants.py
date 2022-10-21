@@ -6,13 +6,23 @@ from typing import Union
 
 PATHLIKE = Union[str, Path]
 FEATURE_MODEL_FILENAME = "feature_model.pth"
+FASTSPEECH2_MODEL_FILENAME = "fastspeech2_model.pth"
 MELS_MEAN_FILENAME = "mels_mean.pth"
 MELS_STD_FILENAME = "mels_std.pth"
+ENERGY_MEAN_FILENAME = "energy_mean.pth"
+ENERGY_STD_FILENAME = "energy_std.pth"
+ENERGY_MIN_FILENAME = "energy_min.pth"
+ENERGY_MAX_FILENAME = "energy_max.pth"
+PITCH_MEAN_FILENAME = "pitch_mean.pth"
+PITCH_STD_FILENAME = "pitch_std.pth"
+PITCH_MIN_FILENAME = "pitch_min.pth"
+PITCH_MAX_FILENAME = "pitch_max.pth"
 PHONEMES_FILENAME = "phonemes.json"
 SPEAKERS_FILENAME = "speakers.json"
 CHECKPOINT_DIR = Path("checkpoints")
 HIFI_CHECKPOINT_NAME = "hifi"
-FEATURE_CHECKPOINT_NAME = "feature"
+FEATURE_CHECKPOINT_NAME = "fastspeech2"
+FASTSPEECH2_CHECKPOINT_NAME = "fastspeech2"
 DATA_DIR = Path("checkpoints")
 LOG_DIR = Path("logs")
 MODEL_DIR = Path("models")
@@ -86,19 +96,19 @@ PHONEMES_ENG = [
 ]
 
 PHONEMES_CHI = [
-    ['qing1', 'chu1', 'yu2', 'lan2', 'er2', 'sheng4', 'yu2', 'lan2'],
-    ['tian1', 'dao4', 'chou2', 'qin2'],
-    ['jiu3', 'tian1', 'lan3', 'yue4'],
-    ['sai1', 'weng1', 'shi1', 'ma3', '，', 'yan1', 'zhi1', 'fei1', 'fu2'],
-    ['yi1', 'ming2', 'jing1', 'ren2'],
-    ['yi1', 'si1', 'bu4', 'gou3'],
-    ['yi1', 'jian4', 'shuang1', 'diao1'],
-    ['shan1', 'yu3', 'yu4', 'lai2', 'feng1', 'man3', 'lou2'],
-    ['ma2', 'que4', 'sui1', 'xiao3', '，', 'wu3', 'zang4', 'ju4', 'quan2'],
-    ['qiang2', 'long2', 'nan2', 'ya1', 'di4', 'tou2', 'she2'],
-    ['qian2', 'pa4', 'lang2', 'hou4', 'pa4', 'hu3'],
-    ['da4', 'zhi4', 'ruo4', 'yu2']
- ]
+    ['q', 'i1', 'ng', 'ch', 'u1', 'v2', 'l', 'a2', 'n', 'e2', 'r', 'sh', 'e4', 'ng', 'v2', 'l', 'a2', 'n'],
+    ['t', 'ia1', 'n', 'd', 'ao4', 'ch', 'ou2', 'q', 'i2', 'n'],
+    ['j', 'iou3', 't', 'ia1', 'n', 'l', 'a3', 'n', 've4'],
+    ['s', 'ai1', 'ue1', 'n', 'sh', 'ii1', 'm', 'a3', 'ia1', 'n', 'zh', 'ii1', 'f', 'ei1', 'f', 'u2'],
+    ['i1', 'm', 'i2', 'ng', 'j', 'i1', 'ng', 'r', 'e2', 'n'],
+    ['i1', 's', 'ii1', 'b', 'u4', 'g', 'ou3'],
+    ['i1', 'j', 'ia4', 'n', 'sh', 'ua1', 'ng', 'd', 'iao1'],
+    ['sh', 'a1', 'n', 'v3', 'v4', 'l', 'ai2', 'f', 'e1', 'ng', 'm', 'a3', 'n', 'l', 'ou2'],
+    ['m', 'a2', 'q', 've4', 's', 'uei1', 'x', 'iao3', 'u3', 'z', 'a4', 'ng', 'j', 'v4', 'q', 'va2', 'n'],
+    ['q', 'ia2', 'ng', 'l', 'o2', 'ng', 'n', 'a2', 'n', 'ia1', 'd', 'i4', 't', 'ou2', 'sh', 'e2'],
+    ['q', 'ia2', 'n', 'p', 'a4', 'l', 'a2', 'ng', 'h', 'ou4', 'p', 'a4', 'h', 'u3'],
+    ['d', 'a4', 'zh', 'ii4', 'r', 'uo4', 'v2']
+]
 
 RUSSIAN_SPEAKERS = {0: "Игорина"}
 try:

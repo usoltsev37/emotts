@@ -48,12 +48,13 @@ class FastSpeech2Batch:
     speaker_ids: torch.Tensor
     phonemes: torch.Tensor
     num_phonemes: torch.Tensor
-    max_phonemes_len: int
     mels: torch.Tensor
-    max_mels_len: int
+    mels_lens: torch.Tensor
     energies: torch.Tensor
     pitches: torch.Tensor
     durations: torch.Tensor
+
+
 
 
 class FastSpeech2Dataset(Dataset[FastSpeech2Sample]):
@@ -67,6 +68,10 @@ class FastSpeech2Dataset(Dataset[FastSpeech2Sample]):
         energy_std: float,
         pitch_mean: float,
         pitch_std: float,
+        energy_min: float,
+        energy_max: float,
+        pitch_min: float,
+        pitch_max: float,
         phoneme_to_ids: Dict[str, int],
         data: List[FastSpeech2Info],
     ):
@@ -77,10 +82,17 @@ class FastSpeech2Dataset(Dataset[FastSpeech2Sample]):
         self.hop_size = hop_size
         self.mels_mean = mels_mean
         self.mels_std = mels_std
-        self.energy_mean=energy_mean,
-        self.energy_std=energy_std,
-        self.pitch_mean=pitch_mean,
-        self.pitch_std=pitch_std,
+        self.energy_mean = energy_mean
+        self.energy_std = energy_std
+        self.pitch_mean = pitch_mean
+        self.pitch_std = pitch_std
+        self.energy_min = energy_min
+        self.energy_max = energy_max
+        self.pitch_min = pitch_min 
+        self.pitch_max = pitch_max    
+
+
+
 
     def __len__(self) -> int:
         return len(self._dataset)
@@ -97,10 +109,13 @@ class FastSpeech2Dataset(Dataset[FastSpeech2Sample]):
 
         mels: torch.Tensor = torch.Tensor(np.load(info.mel_path))
         mels = (mels - self.mels_mean) / self.mels_std
+        
         energy = np.load(info.energy_path)
         energy = (energy - self.energy_mean) / self.energy_std
+
         pitch = np.load(info.pitch_path)
         pitch = (pitch - self.pitch_mean) / self.pitch_std
+
 
 
         return FastSpeech2Sample(
@@ -179,8 +194,8 @@ class FastSpeech2Factory:
             ]
         self._dataset: List[FastSpeech2Info] = self._build_dataset()
         self.mels_mean, self.mels_std = self._get_mean_and_std_mels()
-        self.energy_mean, self.energy_std = self._get_mean_and_std_scalar(self._energy_dir, self._fastspeech2_ext)
-        self.pitch_mean, self.pitch_std = self._get_mean_and_std_scalar(self._pitch_dir, self._fastspeech2_ext)
+        self.energy_mean, self.energy_std, self.energy_min, self.energy_max = self._get_mean_and_std_scalar(self._energy_dir, self._fastspeech2_ext)
+        self.pitch_mean, self.pitch_std, self.pitch_min, self.pitch_max  = self._get_mean_and_std_scalar(self._pitch_dir, self._fastspeech2_ext)
 
     @staticmethod
     def add_to_mapping(mapping: Dict[str, int], token: str) -> None:
@@ -219,6 +234,10 @@ class FastSpeech2Factory:
             energy_std=self.energy_std,
             pitch_mean=self.pitch_mean,
             pitch_std=self.pitch_std,
+            energy_min=self.energy_min, 
+            energy_max=self.energy_max,
+            pitch_min=self.pitch_min, 
+            pitch_max=self.pitch_max,
             phoneme_to_ids=self.phoneme_to_id,
             data=train_data,
         )
@@ -231,6 +250,10 @@ class FastSpeech2Factory:
             energy_std=self.energy_std,
             pitch_mean=self.pitch_mean,
             pitch_std=self.pitch_std,
+            energy_min=self.energy_min, 
+            energy_max=self.energy_max,
+            pitch_min=self.pitch_min, 
+            pitch_max=self.pitch_max,
             phoneme_to_ids=self.phoneme_to_id,
             data=test_data,
         )
@@ -314,6 +337,9 @@ class FastSpeech2Factory:
         return mels_mean.view(-1, 1), mels_std.view(-1, 1)
     
     def _get_mean_and_std_scalar(self, scalars_path: Path, scalar_exts: str) -> Tuple[float, float]:
+        max_scalar = np.iinfo(np.int64).min
+        min_scalar = np.iinfo(np.int64).max
+
         scalar_sum = 0.0
         scalar_squared_sum = 0.0
         counts = 0
@@ -322,16 +348,19 @@ class FastSpeech2Factory:
             if scalar_path.parent.name in REMOVE_SPEAKERS:
                 continue
             scalar: torch.Tensor = torch.Tensor(np.load(scalar_path))
+            max_scalar = max(max_scalar, torch.max(scalar).item())
+            min_scalar = min(min_scalar, torch.min(scalar).item())
             scalar_sum += scalar.sum(dim=-1)
             scalar_squared_sum += (scalar ** 2).sum(dim=-1)
             counts += scalar.shape[-1]
 
-        scalar_mean: torch.Tensor = scalar_sum / counts
-        scalar_std: torch.Tensor = torch.sqrt(
+        scalar_mean = scalar_sum / counts
+        scalar_std = torch.sqrt(
             (scalar_squared_sum - scalar_sum * scalar_sum / counts) / counts
         )
 
-        return scalar_mean, scalar_std
+        return scalar_mean.item(), scalar_std.item(), ((min_scalar - scalar_mean) / scalar_std).item(), ((max_scalar - scalar_mean) / scalar_std).item()
+
 
 
 
@@ -378,6 +407,7 @@ class FastSpeech2Collate:
 
         num_mels = batch[0].mel.size(0)
         max_target_len = max([x.mel.size(1) for x in batch])
+        mels_lens = torch.LongTensor([x.mel.size(1) for x in batch])
 
 
         # include mel padded and gate padded
@@ -393,10 +423,10 @@ class FastSpeech2Collate:
             speaker_ids=input_speaker_ids,
             phonemes=text_padded,
             num_phonemes=input_lengths,
-            max_phonemes_len=max_input_len,
+            mels_lens=mels_lens,
             mels=mel_padded,
-            max_mels_len=max_target_len,
             energies=energy_padded,
             pitches=pitch_padded,
             durations=durations_padded,
         )
+

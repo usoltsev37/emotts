@@ -21,6 +21,11 @@ data:
   mels_dir: data/freest/mels
   wav_dir: data/freest/resampled
   feature_dir: data/freest/feature_output
+  mels_fastspeech2_dir: data/processed/esd/english/fastspeech2/mels
+  duration_dir: data/processed/esd/english/fastspeech2/duration
+  pitch_dir: data/processed/esd/english/fastspeech2/pitch
+  energy_dir: data/processed/esd/english/fastspeech2/energy
+  phones_dir: data/processed/esd/english/fastspeech2/phones
   finetune_speakers:
     - "0001"
     - "0002"
