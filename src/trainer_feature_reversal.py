@@ -411,8 +411,9 @@ class Trainer:
 
         phonemes = [
             [self.phonemes_to_id.get(p, 0) for p in sequence]
-            for sequence in GENERATED_PHONEMES
+            for sequence in (PHONEMES_ENG if self.config.lang == "english" else PHONEMES_CHI)
         ]
+        
         audio_folder = self.checkpoint_path / f"{self.iteration_step}"
         audio_folder.mkdir(exist_ok=True, parents=True)
         with torch.no_grad():

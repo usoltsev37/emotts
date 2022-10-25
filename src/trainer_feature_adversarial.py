@@ -29,7 +29,6 @@ from src.models.feature_models.loss_function import NonAttentiveTacotronLoss
 from src.models.hifi_gan.models import Generator, load_model as load_hifi
 from src.train_config import TrainParams
 
-GENERATED_PHONEMES = []
 
 class Trainer:
 
@@ -439,7 +438,7 @@ class Trainer:
 
         phonemes = [
             [self.phonemes_to_id.get(p, 0) for p in sequence]
-            for sequence in GENERATED_PHONEMES
+            for sequence in (PHONEMES_ENG if self.config.lang == "english" else PHONEMES_CHI)
         ]
 
         with torch.no_grad():

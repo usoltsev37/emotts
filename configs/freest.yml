@@ -95,7 +95,7 @@ scheduler:
   decay_rate: 0.5
   last_epoch: 400000
 model:
-  n_frames_per_step: 3
+  n_frames_per_step: 1
   encoder_config:
     n_convolutions: 3
     kernel_size: 5
