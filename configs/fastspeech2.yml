@@ -14,6 +14,7 @@ total_iterations: 500001
 finetune: false
 test_size: 0.05
 device: cuda:0
+lang: english
 checkpoint_name: vctk_esd
 data:
   text_dir: data/esd/mfa_outputs

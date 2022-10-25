@@ -83,10 +83,6 @@ class Trainer:
         self.log_dir = LOG_DIR / self.config.checkpoint_name / FEATURE_CHECKPOINT_NAME
         self.references = list( (REFERENCE_PATH / Path(self.config.lang)).rglob("*.pkl"))
        
-        if self.config.lang == "english":
-            GENERATED_PHONEMES = PHONEMES_ENG
-        elif self.config.lang == "chinese":
-            GENERATED_PHONEMES = PHONEMES_CHI
             
         self.create_dirs()
         self.phonemes_to_id: Dict[str, int] = {}
