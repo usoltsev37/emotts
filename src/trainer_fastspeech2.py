@@ -32,7 +32,7 @@ from src.constants import (
     SPEAKERS_FILENAME,
 )
 from src.data_process.fastspeech2_dataset import FastSpeech2Batch, FastSpeech2Collate, FastSpeech2Factory
-from src.models.fastspeech2 import FastSpeech2
+from src.models.fastspeech2.fastspeech2 import FastSpeech2
 from src.models.fastspeech2.loss import FastSpeech2Loss
 from src.models.hifi_gan.models import Generator, load_model as load_hifi
 from src.train_config import TrainParams
