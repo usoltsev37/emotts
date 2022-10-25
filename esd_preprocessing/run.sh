@@ -3,7 +3,7 @@ conda activate emotts
 cd repo
 
 export OUTPUT_DIR=data
-: '
+
 [ -d "$OUTPUT_DIR/processed/esd/" ] && rm -rf $OUTPUT_DIR/processed/esd/
 
 echo -e "\n1. Extract from zip"
@@ -39,7 +39,7 @@ mkdir -p models
 [ $language == "chinese" ] && wget -q --show-progress https://raw.githubusercontent.com/lIkesimba9/FreeST_mfa_align/main/model/pinyin-lexicon_with_tab.dict -P models
 
 [ $language == "english" ] && wget -q --show-progress https://github.com/MontrealCorpusTools/mfa-models/raw/main/acoustic/english.zip -P models
-[ $language == "english" ] && wget -q --show-progress http://www.openslr.org/resources/11/librispeech-lexicon.txt -P models
+[ $language == "english" ] && wget -q --show-progress https://raw.githubusercontent.com/lIkesimba9/FreeST_mfa_align/main/librispeech-lexicon_with_tab.txt -P models
 
 conda env config vars set LD_LIBRARY_PATH=$CONDA_PREFIX/lib  # link to libopenblas
 conda deactivate
@@ -63,7 +63,7 @@ rm -rf temp
 echo -e "\n9. MFA Postprocessing"
 # Aggregate mels by speakers
 python src/preprocessing/mfa_postprocessing.py --input-dir $OUTPUT_DIR/processed/esd/$language/mels
-'
+
 
 echo -e "\n9. Compute pitch, mels, energy, duration for fastspeech2"
 

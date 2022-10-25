@@ -1,6 +1,6 @@
 #!/bin/bash
 conda activate emotts
-cd repo/data
+cd repo #/data
 
 export OUTPUT_DIR=data
 
@@ -45,7 +45,7 @@ echo -e "\n6. MFA Alignment setup"
 # download a pretrained english acoustic model, and english lexicon
 mkdir -p models
 wget -q --show-progress https://github.com/MontrealCorpusTools/mfa-models/raw/main/acoustic/english.zip -P models
-wget -q --show-progress http://www.openslr.org/resources/11/librispeech-lexicon.txt -P models
+wget -q --show-progress https://raw.githubusercontent.com/lIkesimba9/FreeST_mfa_align/main/librispeech-lexicon_with_tab.txt -P models
 
 conda env config vars set LD_LIBRARY_PATH=$CONDA_PREFIX/lib  # link to libopenblas
 conda deactivate
@@ -58,7 +58,7 @@ python src/preprocessing/mfa_preprocessing.py --input-dir $OUTPUT_DIR/processed/
 echo -e "\n8. MFA Alignment"
 echo $OUTPUT_DIR
 
-mfa align -t ./temp --clean -j 4 $OUTPUT_DIR/processed/vctk/mfa_inputs models/librispeech-lexicon.txt models/english.zip $OUTPUT_DIR/processed/vctk/mfa_outputs
+mfa align -t ./temp --clean -j 4 $OUTPUT_DIR/processed/vctk/mfa_inputs models/librispeech-lexicon_with_tab.txt models/english.zip $OUTPUT_DIR/processed/vctk/mfa_outputs
 rm -rf temp
 
 echo -e "\n9. MFA Postprocessing"

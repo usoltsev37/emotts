@@ -59,8 +59,10 @@ def main(input_audio_dir: Path, input_textgrid_dir: Path, output_dir: Path, audi
 
     for tg_path in tqdm(textgrid_collection):
         audio_path = input_audio_dir / Path(tg_path.parent.stem) /  Path(tg_path.stem + f".{audio_ext}")
-        
-        phones, duration, pitch, energy, mel_spectrogram = process_utterance(audio_path, tg_path, stft)
+        output = process_utterance(audio_path, tg_path, stft)
+        if output == None:
+            continue
+        phones, duration, pitch, energy, mel_spectrogram = output
         # [size],           [size] [size]  [n_mels x time]
         new_mel_path = output_dir / Path("mels") / Path(tg_path.parent.stem)
         new_pitch_path = output_dir / Path("pitch") / Path(tg_path.parent.stem)
