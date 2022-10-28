@@ -8,6 +8,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 from tqdm import tqdm
+from sklearn.preprocessing import StandardScaler
 
 from src.data_process.config import DatasetParams
 from src.constants import REMOVE_SPEAKERS
@@ -97,6 +98,30 @@ class FastSpeech2Dataset(Dataset[FastSpeech2Sample]):
     def __len__(self) -> int:
         return len(self._dataset)
 
+    def is_outlier(self, x: np.array, p25, p75):
+        """Check if value is an outlier."""
+        lower = p25 - 1.5 * (p75 - p25)
+        upper = p75 + 1.5 * (p75 - p25)
+
+        return x < lower or x > upper
+
+    def normalize(self, array: np.array, mean: float, std: float):
+        p25 = np.percentile(array, 25)
+        p75 = np.percentile(array, 75)
+        zero_idxs = np.where(array == 0.0)[0]
+        indices_of_outliers = []
+        for ind, value in enumerate(array):
+            if self.is_outlier(value, p25, p75):
+                indices_of_outliers.append(ind)
+        array = (array - mean) / std
+        array[indices_of_outliers] = 0.0
+        array[zero_idxs] = 0.0
+        # replace by mean f0.
+        array[indices_of_outliers] = np.max(array)
+
+        return array
+
+
     def __getitem__(self, idx: int) -> FastSpeech2Sample:
 
         info = self._dataset[idx]
@@ -110,11 +135,9 @@ class FastSpeech2Dataset(Dataset[FastSpeech2Sample]):
         mels: torch.Tensor = torch.Tensor(np.load(info.mel_path))
         mels = (mels - self.mels_mean) / self.mels_std
         
-        energy = np.load(info.energy_path)
-        energy = (energy - self.energy_mean) / self.energy_std
+        energy = self.normalize(np.load(info.energy_path), self.energy_mean, self.energy_std)
 
-        pitch = np.load(info.pitch_path)
-        pitch = (pitch - self.pitch_mean) / self.pitch_std
+        pitch = self.normalize(np.load(info.pitch_path), self.pitch_mean, self.pitch_std)
 
 
 
@@ -194,8 +217,17 @@ class FastSpeech2Factory:
             ]
         self._dataset: List[FastSpeech2Info] = self._build_dataset()
         self.mels_mean, self.mels_std = self._get_mean_and_std_mels()
-        self.energy_mean, self.energy_std, self.energy_min, self.energy_max = self._get_mean_and_std_scalar(self._energy_dir, self._fastspeech2_ext)
-        self.pitch_mean, self.pitch_std, self.pitch_min, self.pitch_max  = self._get_mean_and_std_scalar(self._pitch_dir, self._fastspeech2_ext)
+        self.energy_mean, self.energy_std = self._get_mean_and_std_scalar(self._energy_dir, self._fastspeech2_ext)
+        self.energy_min, self.energy_max = self._get_min_max(self._energy_dir, self._fastspeech2_ext, self.energy_mean, self.energy_std)
+        
+        self.energy_min = (self.energy_min - self.energy_mean) / self.energy_std
+        self.energy_max = (self.energy_max - self.energy_mean) / self.energy_std
+        
+        self.pitch_mean, self.pitch_std = self._get_mean_and_std_scalar(self._pitch_dir, self._fastspeech2_ext)
+        self.pitch_min, self.pitch_max = self._get_min_max(self._pitch_dir, self._fastspeech2_ext, self.pitch_mean, self.pitch_std)
+        
+        self.pitch_min = (self.pitch_min - self.pitch_mean) / self.pitch_std
+        self.pitch_max = (self.pitch_max - self.pitch_mean) / self.pitch_std
 
     @staticmethod
     def add_to_mapping(mapping: Dict[str, int], token: str) -> None:
@@ -335,31 +367,48 @@ class FastSpeech2Factory:
         )
 
         return mels_mean.view(-1, 1), mels_std.view(-1, 1)
-    
+
+
+    def _remove_outlier(self, values):
+        values = np.array(values)
+        p25 = np.percentile(values, 25)
+        p75 = np.percentile(values, 75)
+        lower = p25 - 1.5 * (p75 - p25)
+        upper = p75 + 1.5 * (p75 - p25)
+        normal_indices = np.logical_and(values >= lower, values <= upper)
+        return values[normal_indices]
+
+
     def _get_mean_and_std_scalar(self, scalars_path: Path, scalar_exts: str) -> Tuple[float, float]:
-        max_scalar = np.iinfo(np.int64).min
-        min_scalar = np.iinfo(np.int64).max
-
-        scalar_sum = 0.0
-        scalar_squared_sum = 0.0
-        counts = 0
-
+        scaler = StandardScaler()
         for scalar_path in scalars_path.rglob(f"*{scalar_exts}"):
             if scalar_path.parent.name in REMOVE_SPEAKERS:
                 continue
-            scalar: torch.Tensor = torch.Tensor(np.load(scalar_path))
-            max_scalar = max(max_scalar, torch.max(scalar).item())
-            min_scalar = min(min_scalar, torch.min(scalar).item())
-            scalar_sum += scalar.sum(dim=-1)
-            scalar_squared_sum += (scalar ** 2).sum(dim=-1)
-            counts += scalar.shape[-1]
+            #print(scalar_path)
 
-        scalar_mean = scalar_sum / counts
-        scalar_std = torch.sqrt(
-            (scalar_squared_sum - scalar_sum * scalar_sum / counts) / counts
-        )
+            arr = self._remove_outlier(np.load(scalar_path))
+            #arr = np.load(scalar_path)
+            #print(arr, arr.shape)
+            if (arr.shape[0] == 0):
+                print(scalar_path)
+                continue
+                
+            scaler.partial_fit(arr.reshape((-1, 1)))
+        mean = scaler.mean_[0]
+        std = scaler.scale_[0]
+        return mean, std
+    
+    def _get_min_max(self, in_dir: Path, scalar_exts: str, mean, std):
+        max_value = np.finfo(np.float64).min
+        min_value = np.finfo(np.float64).max
+        for filename in in_dir.rglob(f"*{scalar_exts}"):
+            values = self._remove_outlier(np.load(filename))
+            #values = np.load(filename)
 
-        return scalar_mean.item(), scalar_std.item(), ((min_scalar - scalar_mean) / scalar_std).item(), ((max_scalar - scalar_mean) / scalar_std).item()
+            max_value = max(max_value, max(values))
+            min_value = min(min_value, min(values))
+
+        return min_value, max_value
 
 
 

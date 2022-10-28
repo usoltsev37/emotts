@@ -155,7 +155,7 @@ def process_utterance(audio_path: Path, textgrid_path: Path,
 
     return phone_collection, duration_collecton, pitch, energy, mel_spectrogram
 
-def get_alignment(tier: tgt.core.TextGrid) -> Tuple[List, float, float]:
+def get_alignment(tier) -> Tuple[List, float, float]:
     sil_phones = ["sil", "sp", "spn"]
 
     phone_collection = []
