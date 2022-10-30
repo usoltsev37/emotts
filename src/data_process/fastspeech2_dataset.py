@@ -137,7 +137,7 @@ class FastSpeech2Dataset(Dataset[FastSpeech2Sample]):
         
         energy = self.normalize(np.load(info.energy_path), self.energy_mean, self.energy_std)
 
-        pitch = self.normalize(np.load(info.pitch_path), self.pitch_mean, self.pitch_std)
+        pitch = np.load(info.pitch_path)
 
 
 

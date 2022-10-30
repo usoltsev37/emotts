@@ -90,15 +90,7 @@ class VarianceAdaptor(nn.Module):
             )
         return prediction, embedding
 
-    def forward(
-        self,
-        x,
-        src_mask,
-        mel_mask=None,
-        max_len=None,
-        pitch_target=None,
-        energy_target=None,
-        duration_target=None,
+    def forward(self, x, src_mask, mel_mask, max_len, pitch_target, energy_target, duration_target,
         p_control=1.0,
         e_control=1.0,
         d_control=1.0,
@@ -116,17 +108,8 @@ class VarianceAdaptor(nn.Module):
         )
         x = x + energy_embedding
 
-        if duration_target is not None:
-            x, mel_len = self.length_regulator(x, duration_target, max_len)
-            duration_rounded = duration_target
-        else:
-            duration_rounded = torch.clamp(
-                (torch.round(torch.exp(log_duration_prediction) - 1) * d_control),
-                min=0,
-            )
-            x, mel_len = self.length_regulator(x, duration_rounded, max_len)
-            mel_mask = get_mask_from_lengths(mel_len, torch.max(mel_len).item(), mel_len.device)
-
+        x, mel_len = self.length_regulator(x, duration_target, max_len)
+        duration_rounded = duration_target
 
 
         return (
@@ -138,6 +121,33 @@ class VarianceAdaptor(nn.Module):
             mel_len,
             mel_mask,
         )
+    
+    def inference(self, x, src_mask, p_control=1.0, e_control=1.0, d_control=1.0):
+        log_duration_prediction = self.duration_predictor(x, src_mask)
+
+        _, pitch_embedding = self.get_pitch_embedding(
+            x, None, src_mask, p_control
+        )
+        x = x + pitch_embedding
+
+        _, energy_embedding = self.get_energy_embedding(
+            x, None, src_mask, e_control
+        )
+        x = x + energy_embedding
+
+        duration_rounded = torch.clamp(
+            (torch.round(torch.exp(log_duration_prediction) - 1) * d_control),
+            min=0,
+        )
+        x, mel_len = self.length_regulator(x, duration_rounded, None)
+        mel_mask = get_mask_from_lengths(mel_len, torch.max(mel_len).item(), mel_len.device)
+
+        return (
+            x,
+            mel_len,
+            mel_mask,
+        )
+
 
 
 class LengthRegulator(nn.Module):

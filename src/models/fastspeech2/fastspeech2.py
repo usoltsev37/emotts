@@ -54,10 +54,10 @@ class FastSpeech2(nn.Module):
 
         output = self.encoder(batch.phonemes, src_masks)
 
-        if self.speaker_emb is not None:
-            output = output + self.speaker_emb(batch.speaker_ids).unsqueeze(1).expand(
-                -1, max_phonemes_lenght, -1
-            )
+        
+        output = output + self.speaker_emb(batch.speaker_ids).unsqueeze(1).expand(
+            -1, max_phonemes_lenght, -1
+        )
 
         (
             output,
@@ -110,31 +110,11 @@ class FastSpeech2(nn.Module):
  
         output = self.encoder(phonemes, src_masks)
 
-        if self.speaker_emb is not None:
-            output = output + self.speaker_emb(speaker_ids).unsqueeze(1).expand(
-                -1, max_phonemes_len, -1
-            )
-
-        (
-            output,
-            _,
-            _,
-            _,
-            _,
-            mel_lens,
-            mel_masks,
-        ) = self.variance_adaptor(
-            output,
-            src_masks,
-            None,
-            None,
-            None,
-            None,
-            None,
-            p_control,
-            e_control,
-            d_control,
+        output = output + self.speaker_emb(speaker_ids).unsqueeze(1).expand(
+            -1, max_phonemes_len, -1
         )
+
+        (output, mel_lens, mel_masks) = self.variance_adaptor.inference(output, src_masks, p_control, e_control, d_control)
 
         output, mel_masks = self.decoder(output, mel_masks)
         output = self.mel_linear(output)

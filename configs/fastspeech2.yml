@@ -15,7 +15,7 @@ finetune: false
 test_size: 0.05
 device: cuda:0
 lang: english
-checkpoint_name: vctk_esd
+checkpoint_name: vctk_esd_log_pitch
 data:
   text_dir: data/esd/mfa_outputs
   mels_dir: data/esd/mels
@@ -30,6 +30,18 @@ data:
 pretrained_hifi: models/en/hifi
 base_model: models/en/tacotron
 fastspeech2:
+  use_gst: true
+  gst_config:
+    ref_enc_filters:
+      - 32
+      - 32
+      - 64
+      - 64
+      - 128
+      - 128
+    emb_dim: 256
+    num_heads: 8
+    token_num: 10
   encoder_params:
     conv_filter_size: 1024
     conv_kernel_size:

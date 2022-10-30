@@ -28,6 +28,27 @@ SAMPLE_RATE = 22050
 FILTER_LENGTH = 1024
 
 
+def _convert_to_continuous_f0(f0: np.array) -> np.array:
+    if (f0 == 0).all():
+        return f0
+
+    # padding start and end of f0 sequence
+    start_f0 = f0[f0 != 0][0]
+    end_f0 = f0[f0 != 0][-1]
+    start_idx = np.where(f0 == start_f0)[0][0]
+    end_idx = np.where(f0 == end_f0)[0][-1]
+    f0[:start_idx] = start_f0
+    f0[end_idx:] = end_f0
+
+    # get non-zero frame index
+    nonzero_idxs = np.where(f0 != 0)[0]
+
+    # perform linear interpolation
+    interp_fn = interp1d(nonzero_idxs, f0[nonzero_idxs])
+    f0 = interp_fn(np.arange(0, f0.shape[0]))
+    
+    return f0
+
 
 @click.command()
 @click.option("--input-audio-dir", type=Path, required=True,
@@ -124,14 +145,9 @@ def process_utterance(audio_path: Path, textgrid_path: Path,
 
 
     # perform linear interpolation
-    nonzero_ids = np.where(pitch != 0)[0]
-    interp_fn = interp1d(
-        nonzero_ids,
-        pitch[nonzero_ids],
-        fill_value=(pitch[nonzero_ids[0]], pitch[nonzero_ids[-1]]),
-        bounds_error=False,
-    )
-    pitch = interp_fn(np.arange(0, len(pitch)))
+    pitch = _convert_to_continuous_f0(pitch)
+    nonzero_idxs = np.where(pitch != 0)[0]
+    pitch[nonzero_idxs] = np.log(pitch[nonzero_idxs])
 
     # Phoneme-level average
     pos = 0
