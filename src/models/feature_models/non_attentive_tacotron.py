@@ -14,6 +14,7 @@ from .config import (
     DecoderParams,
     DurationParams,
     EncoderParams,
+    GSTParams,
     GaussianUpsampleParams,
     ModelParams,
     PostNetParams,
@@ -423,6 +424,7 @@ class NonAttentiveTacotron(nn.Module):
         n_speakers: int,
         n_mel_channels: int,
         config: ModelParams,
+        gst_config: GSTParams,
         finetune: bool,
     ):
         super().__init__()
@@ -430,10 +432,10 @@ class NonAttentiveTacotron(nn.Module):
         full_embedding_dim = (
             config.phonem_embedding_dim
             + config.speaker_embedding_dim
-            + config.gst_config.emb_dim
+            + gst_config.emb_dim
         )
         self.finetune = finetune
-        self.gst_emb_dim = config.gst_config.emb_dim
+        self.gst_emb_dim = gst_config.emb_dim
         self.phonem_embedding = nn.Embedding(
             n_phonems, config.phonem_embedding_dim, padding_idx=0
         )
@@ -456,7 +458,7 @@ class NonAttentiveTacotron(nn.Module):
             config.encoder_config,
         )
         self.attention = Attention(full_embedding_dim, config.attention_config)
-        self.gst = GST(n_mel_channels=n_mel_channels, config=config.gst_config)
+        self.gst = GST(n_mel_channels=n_mel_channels, config=gst_config)
         self.decoder = Decoder(
             n_mel_channels,
             config.n_frames_per_step,

@@ -11,20 +11,15 @@ class FastSpeech2Loss(nn.Module):
         self.mse_loss = nn.MSELoss()
         self.mae_loss = nn.L1Loss()
 
-    def forward(self, batch: FastSpeech2Batch, predictions):
+    def forward(self, batch: FastSpeech2Batch, mel_predictions,
+                    postnet_mel_predictions,
+                    pitch_predictions,
+                    energy_predictions,
+                    log_duration_predictions,
+                    src_masks,
+                    mel_masks
+                ):
 
-        (
-            mel_predictions,
-            postnet_mel_predictions,
-            pitch_predictions,
-            energy_predictions,
-            log_duration_predictions,
-            _,
-            src_masks,
-            mel_masks,
-            _,
-            _,
-        ) = predictions
         src_masks = ~src_masks
         mel_masks = ~mel_masks
         log_duration_targets = torch.log(batch.durations.float() + 1)

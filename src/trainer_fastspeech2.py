@@ -95,6 +95,8 @@ class Trainer:
             pitch_max=self.pitch_max,
             energy_min=self.energy_min,
             energy_max=self.energy_max,
+            gst_config=self.config.gst_config,
+            finetune=self.config.finetune
         ).to(self.device)
 
         if self.config.finetune:
@@ -113,7 +115,12 @@ class Trainer:
             self.pitch_std = torch.load(mapping_folder / PITCH_STD_FILENAME)
             self.pitch_min = torch.load(mapping_folder / PITCH_MIN_FILENAME)
             self.pitch_max = torch.load(mapping_folder / PITCH_MAX_FILENAME)
-
+        
+        self.discriminator = nn.Sequential(
+            nn.Linear(self.config.gst_config.emb_dim, len(self.speakers_to_id)),
+            nn.Softmax(),
+        )
+        self.discriminator = self.discriminator.to(self.device)
 
         self.vocoder: Generator = load_hifi(
             model_path=self.config.pretrained_hifi,
@@ -122,8 +129,19 @@ class Trainer:
             device=self.device,
         )
 
+        
+
+
         self.model_optimizer = Adam(
             self.fastspeech2_model.parameters(),
+            lr=self.config.optimizer.learning_rate,
+            weight_decay=self.config.optimizer.reg_weight,
+            betas=(self.config.optimizer.adam_beta1, self.config.optimizer.adam_beta2),
+            eps=self.config.optimizer.adam_epsilon,
+        )
+
+        self.discriminator_optimizer = Adam(
+            self.discriminator.parameters(),
             lr=self.config.optimizer.learning_rate,
             weight_decay=self.config.optimizer.reg_weight,
             betas=(self.config.optimizer.adam_beta1, self.config.optimizer.adam_beta2),
@@ -136,7 +154,15 @@ class Trainer:
             gamma=self.config.scheduler.decay_rate,
         )
 
+        self.discriminator_scheduler = StepLR(
+            optimizer=self.discriminator_optimizer,
+            step_size=self.config.scheduler.decay_steps,
+            gamma=self.config.scheduler.decay_rate,
+        )
+
         self.criterion = FastSpeech2Loss()
+
+        self.adversatial_criterion = nn.NLLLoss()
 
         self.upload_checkpoints()
 
@@ -181,6 +207,7 @@ class Trainer:
             return False
         if not (self.checkpoint_path / self.DISC_OPTIMIZER_FILENAME).is_file():
             return False
+            
         if not (self.checkpoint_path / self.ITERATION_FILENAME).is_file():
             return False
         else:
@@ -203,15 +230,28 @@ class Trainer:
             self.fastspeech2_model: FastSpeech2 = torch.load(
                 model_path, map_location=self.device
             )
+            self.discriminator: nn.Module = torch.load(
+                self.checkpoint_path / self.DISC_MODEL_FILENAME,
+                map_location=self.device
+            )
+
             model_optimizer_state_dict: OrderedDict[str, torch.Tensor] = torch.load(
                 self.checkpoint_path / self.MODEL_OPTIMIZER_FILENAME, map_location=self.device
             )
-
+            disc_optimizer_state_dict: OrderedDict[str, torch.Tensor] = torch.load(
+                self.checkpoint_path / self.DISC_OPTIMIZER_FILENAME, map_location=self.device
+            )
             with open(self.checkpoint_path / self.ITERATION_FILENAME) as f:
                 iteration_dict: Dict[str, int] = json.load(f)
             self.model_optimizer.load_state_dict(model_optimizer_state_dict)
+            self.discriminator_optimizer.load_state_dict(disc_optimizer_state_dict)
             self.model_scheduler = StepLR(
                 optimizer=self.model_optimizer,
+                step_size=self.config.scheduler.decay_steps,
+                gamma=self.config.scheduler.decay_rate,
+            )
+            self.discriminator_scheduler = StepLR(
+                optimizer=self.discriminator_optimizer,
                 step_size=self.config.scheduler.decay_steps,
                 gamma=self.config.scheduler.decay_rate,
             )
@@ -229,9 +269,18 @@ class Trainer:
             self.checkpoint_path / f"{self.iteration_step}_{FASTSPEECH2_MODEL_FILENAME}",
         )
         torch.save(
+            self.discriminator,
+            self.checkpoint_path / self.DISC_MODEL_FILENAME
+        )
+        torch.save(
             self.model_optimizer.state_dict(),
             self.checkpoint_path / self.MODEL_OPTIMIZER_FILENAME,
         )
+        torch.save(
+            self.discriminator_optimizer.state_dict(),
+            self.checkpoint_path / self.DISC_OPTIMIZER_FILENAME,
+        )
+
         torch.save(self.mels_mean, self.checkpoint_path / MELS_MEAN_FILENAME)
         torch.save(self.mels_std, self.checkpoint_path / MELS_STD_FILENAME)
 
@@ -295,6 +344,25 @@ class Trainer:
             audio = y_g_hat.squeeze()
         return audio
 
+    def calc_adv_loss(
+        self, style_emb: torch.Tensor, batch: FastSpeech2Batch
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        log_model = torch.log(1 - self.discriminator(style_emb))
+        loss_model: torch.Tensor = (
+            self.config.loss.adversarial_weight
+            * self.adversatial_criterion(log_model, batch.speaker_ids)
+        )
+
+        log_dicriminator = torch.log(self.discriminator(style_emb.detach()))
+
+        loss_discriminator = (
+            self.config.loss.adversarial_weight
+            * self.adversatial_criterion(log_dicriminator, batch.speaker_ids)
+        )
+
+        return loss_model, loss_discriminator
+
+
     def train(self) -> None:
         torch.manual_seed(self.config.seed)
         torch.cuda.manual_seed(self.config.seed)
@@ -305,10 +373,32 @@ class Trainer:
             for batch in self.train_loader:
                 batch = self.batch_to_device(batch)
                 self.model_optimizer.zero_grad()
-                output = self.fastspeech2_model(batch)
+                (
+                    mel_predictions,
+                    postnet_mel_predictions,
+                    pitch_predictions,
+                    energy_predictions,
+                    log_duration_predictions,
+                    src_masks,
+                    mel_masks,
+                    gst_emb
+                ) = self.fastspeech2_model(batch)
+                
+                total_loss, mel_loss, postnet_mel_loss, pitch_loss, energy_loss, duration_loss  = self.criterion(batch, 
+                    mel_predictions,
+                    postnet_mel_predictions,
+                    pitch_predictions,
+                    energy_predictions,
+                    log_duration_predictions,
+                    src_masks,
+                    mel_masks
+                )
+                
+                loss_generator, loss_discriminator = self.calc_adv_loss(
+                    gst_emb, batch
+                )
 
-                total_loss, mel_loss, postnet_mel_loss, pitch_loss, energy_loss, duration_loss  = self.criterion(batch, output)
-
+                total_loss = total_loss + loss_generator
 
                 total_loss.backward()
 
@@ -317,6 +407,12 @@ class Trainer:
                 )
 
                 self.model_optimizer.step()
+
+                self.discriminator_optimizer.zero_grad()
+
+                loss_discriminator.backward()
+
+                self.discriminator_optimizer.step()
 
                 if (
                     self.config.scheduler.start_decay
@@ -334,7 +430,9 @@ class Trainer:
                             "postnet_mel_loss": postnet_mel_loss,
                             "pitch_loss": pitch_loss,
                             "energy_loss": energy_loss,
-                            "duration_loss": duration_loss
+                            "duration_loss": duration_loss,
+                            "generator": loss_generator,
+                            "discriminator": loss_discriminator
                         }
                     )
 
@@ -361,8 +459,26 @@ class Trainer:
             val_duration_loss = 0.0
             for batch in self.valid_loader:
                 batch = self.batch_to_device(batch)
-                output = self.fastspeech2_model(batch)
-                total_loss, mel_loss, postnet_mel_loss, pitch_loss, energy_loss, duration_loss  = self.criterion(batch, output)
+                (
+                    mel_predictions,
+                    postnet_mel_predictions,
+                    pitch_predictions,
+                    energy_predictions,
+                    log_duration_predictions,
+                    src_masks,
+                    mel_masks,
+                    _
+                ) = self.fastspeech2_model(batch)
+                
+                total_loss, mel_loss, postnet_mel_loss, pitch_loss, energy_loss, duration_loss  = self.criterion(batch, 
+                    mel_predictions,
+                    postnet_mel_predictions,
+                    pitch_predictions,
+                    energy_predictions,
+                    log_duration_predictions,
+                    src_masks,
+                    mel_masks
+                )
                 
                 val_loss += total_loss.item()
                 val_mel_loss += mel_loss.item()
@@ -405,11 +521,16 @@ class Trainer:
                     num_phonemes_tensor = torch.IntTensor([len(sequence)]).to(self.device)
                     speaker = reference_path.parent.name
                     speaker_id = self.speakers_to_id[speaker]
+                    reference = (
+                        torch.load(reference_path, map_location="cpu") - self.mels_mean
+                    ) / self.mels_std
+                    reference = reference.unsqueeze(0)
                     batch = (
                         phonemes_tensor,
                         num_phonemes_tensor,
                         torch.LongTensor([speaker_id]).to(self.device),
-                    )
+                        reference.to(self.device).permute(0, 2, 1).float(),
+                    )                    
                     output = self.fastspeech2_model.inference(batch)
                     output = output[1].permute(0, 2, 1).squeeze(0)
                     output = output * self.mels_std.to(self.device) + self.mels_mean.to(

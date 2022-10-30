@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from typing import List, Literal
+from src.models.feature_models.config import GSTParams
 
 @dataclass
 
@@ -53,6 +54,9 @@ class FastSpeech2Params:
     decoder_params: DecoderParams
     variance_adapter_params: VarianceAdaptorParams
     max_seq_len: int = field(default=1000)
+    use_gst: bool = field(default=False)
+
+
 
 
 

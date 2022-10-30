@@ -71,6 +71,7 @@ class Trainer:
             n_phonems=len(self.phonemes_to_id),
             n_speakers=len(self.speakers_to_id),
             config=self.config.model,
+            gst_config=self.config.gst_config,
             finetune=self.config.finetune,
         ).to(self.device)
 
@@ -85,7 +86,7 @@ class Trainer:
             self.mels_std = torch.load(mapping_folder / MELS_STD_FILENAME)
 
         self.discriminator = nn.Sequential(
-            nn.Linear(self.config.model.gst_config.emb_dim, len(self.speakers_to_id)),
+            nn.Linear(self.config.gst_config.emb_dim, len(self.speakers_to_id)),
             nn.Softmax(),
         )
         self.discriminator = self.discriminator.to(self.device)
@@ -449,8 +450,6 @@ class Trainer:
                         torch.load(reference_path, map_location="cpu") - self.mels_mean
                     ) / self.mels_std
                     reference = reference.unsqueeze(0)
-                    print(reference.shape)
-                    print(reference_path)
                     batch = (
                         phonemes_tensor,
                         num_phonemes_tensor,

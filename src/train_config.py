@@ -6,7 +6,7 @@ from marshmallow_dataclass import class_schema
 
 from src.constants import PATHLIKE
 from src.data_process.config import DatasetParams
-from src.models.feature_models.config import ModelParams
+from src.models.feature_models.config import ModelParams, GSTParams
 from src.models.fastspeech2.config import FastSpeech2Params
 from src.models.hifi_gan.hifi_config import TrainParamsHiFi
 
@@ -41,6 +41,7 @@ class TrainParams:
     data: DatasetParams
     test_size: float
     model: ModelParams
+    gst_config: GSTParams
     fastspeech2: FastSpeech2Params
     optimizer: OptimizerParams
     scheduler: SchedulerParams

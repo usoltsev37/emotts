@@ -13,17 +13,54 @@ iters_per_checkpoint: 50000
 total_iterations: 500001
 finetune: false
 test_size: 0.05
-device: cuda:1
+device: cuda:0
 lang: english
 checkpoint_name: vctk
 data:
-  text_dir: data/vctk/mfa_outputs
-  mels_dir: data/vctk/mels
-  wav_dir: data/vctk/resampled
-  feature_dir: data/vctk/feature_output
+  text_dir: data/esd/mfa_outputs
+  mels_dir: data/esd/mels
+  wav_dir: data/esd/resampled
+  feature_dir: data/esd/feature_output
+  mels_fastspeech2_dir: data/processed/esd/english/fastspeech2/mels
+  duration_dir: data/processed/esd/english/fastspeech2/duration
+  pitch_dir: data/processed/esd/english/fastspeech2/pitch
+  energy_dir: data/processed/esd/english/fastspeech2/energy
+  phones_dir: data/processed/esd/english/fastspeech2/phones
   ignore_speakers: []
 pretrained_hifi: models/en/hifi
 base_model: models/tacotron
+
+fastspeech2:
+  use_gst: false
+  encoder_params:
+    conv_filter_size: 1024
+    conv_kernel_size:
+      - 9
+      - 1
+    encoder_layer: 6
+    encoder_head: 2
+    encoder_hidden: 256
+    encoder_dropout: 0.2
+  decoder_params:
+    conv_filter_size: 1024
+    conv_kernel_size:
+      - 9
+      - 1
+    decoder_layer: 6
+    decoder_head: 2
+    decoder_hidden: 256
+    decoder_dropout: 0.2
+  variance_adapter_params:
+    predictor_params:
+      filter_size: 256
+      kernel_size: 3
+      dropout: 0.5
+    embedding_params:
+      n_bins: 256
+      pitch_quantization: linear
+      energy_quantization: linear
+  max_seq_len: 1000
+
 train_hifi:
   split_data: true
   training_epochs: 1000
@@ -76,6 +113,18 @@ scheduler:
   decay_steps: 50000
   decay_rate: 0.5
   last_epoch: 400000
+gst_config:
+  ref_enc_filters:
+    - 32
+    - 32
+    - 64
+    - 64
+    - 128
+    - 128
+  emb_dim: 256
+  num_heads: 8
+  token_num: 10
+
 model:
   n_frames_per_step: 3
   encoder_config:
@@ -85,17 +134,6 @@ model:
     lstm_layers: 1
     lstm_hidden: 256
     dropout: 0.1
-  gst_config:
-    ref_enc_filters:
-      - 32
-      - 32
-      - 64
-      - 64
-      - 128
-      - 128
-    emb_dim: 256
-    num_heads: 8
-    token_num: 10
   attention_config:
     duration_config:
       lstm_layers: 2

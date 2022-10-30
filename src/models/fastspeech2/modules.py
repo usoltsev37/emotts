@@ -108,17 +108,13 @@ class VarianceAdaptor(nn.Module):
         )
         x = x + energy_embedding
 
-        x, mel_len = self.length_regulator(x, duration_target, max_len)
-        duration_rounded = duration_target
-
+        x, _ = self.length_regulator(x, duration_target, max_len)
 
         return (
             x,
             pitch_prediction,
             energy_prediction,
             log_duration_prediction,
-            duration_rounded,
-            mel_len,
             mel_mask,
         )
     

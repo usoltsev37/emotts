@@ -114,6 +114,7 @@ class Trainer:
             n_phonems=len(self.phonemes_to_id),
             n_speakers=len(self.speakers_to_id),
             config=self.config.model,
+            gst_config=self.config.gst_config,
             finetune=self.config.finetune,
         )
 
@@ -128,7 +129,7 @@ class Trainer:
             self.mels_std = torch.load(mapping_folder / MELS_STD_FILENAME)
 
         discriminator = nn.Linear(
-            self.config.model.gst_config.emb_dim, len(self.speakers_to_id)
+            self.config.gst_config.emb_dim, len(self.speakers_to_id)
         )
 
         self.model = ReversalModel(feature_model, discriminator)
