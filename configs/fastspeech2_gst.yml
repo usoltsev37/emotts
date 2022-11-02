@@ -13,9 +13,9 @@ iters_per_checkpoint: 10000
 total_iterations: 800001
 finetune: false
 test_size: 0.05
-device: cuda:1
+device: cuda:0
 lang: english
-checkpoint_name: vctk_esd_without_gst
+checkpoint_name: vctk_esd_gst
 data:
   text_dir: data/esd/mfa_outputs
   mels_dir: data/esd/mels
@@ -48,7 +48,7 @@ gst_config:
   token_num: 10
 
 fastspeech2:
-  use_gst: false
+  use_gst: true
   encoder_params:
     conv_filter_size: 1024
     conv_kernel_size:

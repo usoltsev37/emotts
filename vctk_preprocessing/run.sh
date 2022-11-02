@@ -1,6 +1,6 @@
 #!/bin/bash
 conda activate emotts
-cd repo #/data
+cd repo/data
 
 export OUTPUT_DIR=data
 

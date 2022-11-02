@@ -5,7 +5,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .transformer import Encoder, Decoder, PostNet
+from src.models.fastspeech2.transformer.Models import Encoder, Decoder
+from src.models.fastspeech2.transformer.Layers import PostNet
 from .modules import VarianceAdaptor
 from .utils import get_mask_from_lengths
 from typing import List, Tuple
@@ -67,21 +68,23 @@ class FastSpeech2(nn.Module):
 
         
 
-        if self.use_gst:
-            if self.finetune:
-                gst_emb = self.gst(batch.mels)
-            else:
-                gst_emb = torch.zeros(output.shape[0], 1, self.gst_emb_dim).to(
-                batch.mels.device
-            )
+
+        if self.finetune:
+            gst_emb = self.gst(batch.mels)
+        else:
+            gst_emb = torch.zeros(output.shape[0], 1, self.gst_emb_dim).to(
+            batch.mels.device
+        )
         
 
         speaker_emb = self.speaker_emb(batch.speaker_ids).unsqueeze(1).expand(
             -1, max_phonemes_lenght, -1
         )
-        style_emb = gst_emb + speaker_emb
+
+        if self.use_gst:
+            output += gst_emb
         
-        output = output + style_emb
+        output = output + speaker_emb
 
         (
             output,
@@ -130,21 +133,23 @@ class FastSpeech2(nn.Module):
  
         output = self.encoder(phonemes, src_masks)
 
-        if self.use_gst:
-            if self.finetune:
-                gst_emb = self.gst(reference_mel)
-            else:
-                gst_emb = torch.zeros(output.shape[0], 1, self.gst_emb_dim).to(
-                speaker_ids.device
-            )
+
+        if self.finetune:
+            gst_emb = self.gst(reference_mel)
+        else:
+            gst_emb = torch.zeros(output.shape[0], 1, self.gst_emb_dim).to(
+            reference_mel.device
+        )
         
 
         speaker_emb = self.speaker_emb(speaker_ids).unsqueeze(1).expand(
             -1, max_phonemes_len, -1
         )
-        style_emb = gst_emb + speaker_emb
+
+        if self.use_gst:
+            output += gst_emb
         
-        output = output + style_emb
+        output = output + speaker_emb
 
         (output, mel_lens, mel_masks) = self.variance_adaptor.inference(output, src_masks, p_control, e_control, d_control)
 

@@ -192,8 +192,8 @@ class HIFITrainer:
                 if j <= 4:
                     self.writer.add_audio(f"generated/y_hat_{j}", y_g_hat[0].cpu(), self.steps, self.config.sample_rate)
 
-            val_err = val_err_tot / (j + 1)
-            self.writer.add_scalar("validation/mel_spec_error", val_err, self.steps)
+                val_err = val_err_tot / (j + 1)
+                self.writer.add_scalar("validation/mel_spec_error", val_err, self.steps)
 
         self.generator.train()
 

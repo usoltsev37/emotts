@@ -52,6 +52,9 @@ class Trainer:
     def __init__(self, config: TrainParams):
         self.config = config
         base_model_path = Path(self.config.base_model)
+
+        self.use_gst = config.fastspeech2.use_gst
+
         self.checkpoint_path = (
             CHECKPOINT_DIR / self.config.checkpoint_name / FASTSPEECH2_CHECKPOINT_NAME
         )
@@ -103,6 +106,10 @@ class Trainer:
             self.fastspeech2_model = torch.load(
                 base_model_path / FASTSPEECH2_MODEL_FILENAME, map_location=self.device
             )
+
+            self.fastspeech2_model.finetune = self.config.finetune
+            self.fastspeech2_model.encoder.requires_grad_(False)
+
             self.mels_mean = torch.load(mapping_folder / MELS_MEAN_FILENAME)
             self.mels_std = torch.load(mapping_folder / MELS_STD_FILENAME)
             
@@ -116,11 +123,29 @@ class Trainer:
             self.pitch_min = torch.load(mapping_folder / PITCH_MIN_FILENAME)
             self.pitch_max = torch.load(mapping_folder / PITCH_MAX_FILENAME)
         
-        self.discriminator = nn.Sequential(
-            nn.Linear(self.config.gst_config.emb_dim, len(self.speakers_to_id)),
-            nn.Softmax(),
-        )
-        self.discriminator = self.discriminator.to(self.device)
+        if self.use_gst:
+
+            self.discriminator = nn.Sequential(
+                nn.Linear(self.config.gst_config.emb_dim, len(self.speakers_to_id)),
+                nn.Softmax(),
+            )
+            self.discriminator = self.discriminator.to(self.device)
+
+            self.discriminator_optimizer = Adam(
+                self.discriminator.parameters(),
+                lr=self.config.optimizer.learning_rate,
+                weight_decay=self.config.optimizer.reg_weight,
+                betas=(self.config.optimizer.adam_beta1, self.config.optimizer.adam_beta2),
+                eps=self.config.optimizer.adam_epsilon,
+            )
+            
+            self.discriminator_scheduler = StepLR(
+                optimizer=self.discriminator_optimizer,
+                step_size=self.config.scheduler.decay_steps,
+                gamma=self.config.scheduler.decay_rate,
+            )
+
+            self.adversatial_criterion = nn.NLLLoss()
 
         self.vocoder: Generator = load_hifi(
             model_path=self.config.pretrained_hifi,
@@ -130,18 +155,8 @@ class Trainer:
         )
 
         
-
-
         self.model_optimizer = Adam(
             self.fastspeech2_model.parameters(),
-            lr=self.config.optimizer.learning_rate,
-            weight_decay=self.config.optimizer.reg_weight,
-            betas=(self.config.optimizer.adam_beta1, self.config.optimizer.adam_beta2),
-            eps=self.config.optimizer.adam_epsilon,
-        )
-
-        self.discriminator_optimizer = Adam(
-            self.discriminator.parameters(),
             lr=self.config.optimizer.learning_rate,
             weight_decay=self.config.optimizer.reg_weight,
             betas=(self.config.optimizer.adam_beta1, self.config.optimizer.adam_beta2),
@@ -154,15 +169,9 @@ class Trainer:
             gamma=self.config.scheduler.decay_rate,
         )
 
-        self.discriminator_scheduler = StepLR(
-            optimizer=self.discriminator_optimizer,
-            step_size=self.config.scheduler.decay_steps,
-            gamma=self.config.scheduler.decay_rate,
-        )
 
         self.criterion = FastSpeech2Loss()
 
-        self.adversatial_criterion = nn.NLLLoss()
 
         self.upload_checkpoints()
 
@@ -201,11 +210,11 @@ class Trainer:
         model_path = self.get_last_model()
         if model_path is None:
             return False
-        if not (self.checkpoint_path / self.DISC_MODEL_FILENAME).is_file():
+        if self.use_gst and not (self.checkpoint_path / self.DISC_MODEL_FILENAME).is_file():
             return False
         if not (self.checkpoint_path / self.MODEL_OPTIMIZER_FILENAME).is_file():
             return False
-        if not (self.checkpoint_path / self.DISC_OPTIMIZER_FILENAME).is_file():
+        if self.use_gst and not (self.checkpoint_path / self.DISC_OPTIMIZER_FILENAME).is_file():
             return False
             
         if not (self.checkpoint_path / self.ITERATION_FILENAME).is_file():
@@ -230,31 +239,36 @@ class Trainer:
             self.fastspeech2_model: FastSpeech2 = torch.load(
                 model_path, map_location=self.device
             )
-            self.discriminator: nn.Module = torch.load(
-                self.checkpoint_path / self.DISC_MODEL_FILENAME,
-                map_location=self.device
-            )
 
             model_optimizer_state_dict: OrderedDict[str, torch.Tensor] = torch.load(
                 self.checkpoint_path / self.MODEL_OPTIMIZER_FILENAME, map_location=self.device
             )
-            disc_optimizer_state_dict: OrderedDict[str, torch.Tensor] = torch.load(
-                self.checkpoint_path / self.DISC_OPTIMIZER_FILENAME, map_location=self.device
-            )
+
+            if self.use_gst:
+                self.discriminator: nn.Module = torch.load(
+                    self.checkpoint_path / self.DISC_MODEL_FILENAME,
+                    map_location=self.device
+                )
+                disc_optimizer_state_dict: OrderedDict[str, torch.Tensor] = torch.load(
+                    self.checkpoint_path / self.DISC_OPTIMIZER_FILENAME, map_location=self.device
+                )
+
+
             with open(self.checkpoint_path / self.ITERATION_FILENAME) as f:
                 iteration_dict: Dict[str, int] = json.load(f)
             self.model_optimizer.load_state_dict(model_optimizer_state_dict)
-            self.discriminator_optimizer.load_state_dict(disc_optimizer_state_dict)
             self.model_scheduler = StepLR(
                 optimizer=self.model_optimizer,
                 step_size=self.config.scheduler.decay_steps,
                 gamma=self.config.scheduler.decay_rate,
             )
-            self.discriminator_scheduler = StepLR(
-                optimizer=self.discriminator_optimizer,
-                step_size=self.config.scheduler.decay_steps,
-                gamma=self.config.scheduler.decay_rate,
-            )
+            if self.use_gst:
+                self.discriminator_optimizer.load_state_dict(disc_optimizer_state_dict)
+                self.discriminator_scheduler = StepLR(
+                    optimizer=self.discriminator_optimizer,
+                    step_size=self.config.scheduler.decay_steps,
+                    gamma=self.config.scheduler.decay_rate,
+                )
             self.iteration_step = iteration_dict[self.ITERATION_NAME]
 
     def save_checkpoint(self) -> None:
@@ -269,17 +283,18 @@ class Trainer:
             self.checkpoint_path / f"{self.iteration_step}_{FASTSPEECH2_MODEL_FILENAME}",
         )
         torch.save(
-            self.discriminator,
-            self.checkpoint_path / self.DISC_MODEL_FILENAME
-        )
-        torch.save(
             self.model_optimizer.state_dict(),
             self.checkpoint_path / self.MODEL_OPTIMIZER_FILENAME,
         )
-        torch.save(
-            self.discriminator_optimizer.state_dict(),
-            self.checkpoint_path / self.DISC_OPTIMIZER_FILENAME,
-        )
+        if self.use_gst:
+            torch.save(
+                self.discriminator,
+                self.checkpoint_path / self.DISC_MODEL_FILENAME
+            )
+            torch.save(
+                self.discriminator_optimizer.state_dict(),
+                self.checkpoint_path / self.DISC_OPTIMIZER_FILENAME,
+            )
 
         torch.save(self.mels_mean, self.checkpoint_path / MELS_MEAN_FILENAME)
         torch.save(self.mels_std, self.checkpoint_path / MELS_STD_FILENAME)
@@ -393,12 +408,11 @@ class Trainer:
                     src_masks,
                     mel_masks
                 )
-                
-                loss_generator, loss_discriminator = self.calc_adv_loss(
-                    gst_emb, batch
-                )
-
-                total_loss = total_loss + loss_generator
+                if self.use_gst:
+                    loss_generator, loss_discriminator = self.calc_adv_loss(
+                        gst_emb, batch
+                    )
+                    total_loss = total_loss + loss_generator
 
                 total_loss.backward()
 
@@ -407,12 +421,12 @@ class Trainer:
                 )
 
                 self.model_optimizer.step()
+                if self.use_gst:
+                    self.discriminator_optimizer.zero_grad()
 
-                self.discriminator_optimizer.zero_grad()
+                    loss_discriminator.backward()
 
-                loss_discriminator.backward()
-
-                self.discriminator_optimizer.step()
+                    self.discriminator_optimizer.step()
 
                 if (
                     self.config.scheduler.start_decay
@@ -422,19 +436,32 @@ class Trainer:
                     self.model_scheduler.step()
 
                 if self.iteration_step % self.config.log_steps == 0:
-                    self.write_losses(
-                        "train",
-                        {
-                            "total": total_loss,
-                            "mel_loss": mel_loss,
-                            "postnet_mel_loss": postnet_mel_loss,
-                            "pitch_loss": pitch_loss,
-                            "energy_loss": energy_loss,
-                            "duration_loss": duration_loss,
-                            "generator": loss_generator,
-                            "discriminator": loss_discriminator
-                        }
-                    )
+                    if self.use_gst:
+                        self.write_losses(
+                            "train",
+                            {
+                                "total": total_loss,
+                                "mel_loss": mel_loss,
+                                "postnet_mel_loss": postnet_mel_loss,
+                                "pitch_loss": pitch_loss,
+                                "energy_loss": energy_loss,
+                                "duration_loss": duration_loss,
+                                "generator": loss_generator,
+                                "discriminator": loss_discriminator
+                            }
+                        )
+                    else:
+                        self.write_losses(
+                            "train",
+                            {
+                                "total": total_loss,
+                                "mel_loss": mel_loss,
+                                "postnet_mel_loss": postnet_mel_loss,
+                                "pitch_loss": pitch_loss,
+                                "energy_loss": energy_loss,
+                                "duration_loss": duration_loss
+                            }
+                        )                        
 
                 if self.iteration_step % self.config.iters_per_checkpoint == 0 or self.iteration_step == 1:
                     self.fastspeech2_model.eval()
