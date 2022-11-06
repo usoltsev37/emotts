@@ -10,12 +10,12 @@ batch_size: 32
 grad_clip_thresh: 1.0
 log_steps: 1000
 iters_per_checkpoint: 50000
-total_iterations: 800001
-finetune: false
+total_iterations: 300001
+finetune: true
 test_size: 0.05
 device: cuda:0
 lang: english
-checkpoint_name: vctk_esd_gst
+checkpoint_name: vctk_esd_gst_tune
 data:
   text_dir: data/esd/mfa_outputs
   mels_dir: data/esd/mels
@@ -33,7 +33,7 @@ data:
     - "0014"
     - "0020"
 pretrained_hifi: models/en/hifi
-base_model: models/en/tacotron
+base_model: models/en/fastspeech2
 
 gst_config:
   ref_enc_filters:
