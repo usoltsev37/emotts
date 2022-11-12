@@ -28,6 +28,8 @@ class FastSpeech2Sample:
     mel: torch.Tensor
     energy: np.array
     pitch: np.array
+    speaker_id_str: str
+    wav_id: str
 
 
 
@@ -148,7 +150,9 @@ class FastSpeech2Dataset(Dataset[FastSpeech2Sample]):
             mel=mels,
             duration=duration,
             energy=energy,
-            pitch=pitch
+            pitch=pitch,
+            speaker_id_str=info.pitch_path.parent.name,
+            wav_id=info.pitch_path.stem,
         )
 
 
