@@ -315,14 +315,14 @@ class Decoder(nn.Module):
 
         self.decoder_rnn = nn.LSTM(
             config.prenet_layers[-1] * self.n_frames_per_step + attention_out_dim,
-            config.decoder_rnn_dim * self.n_frames_per_step,
+            config.decoder_rnn_dim,
             num_layers=config.decoder_num_layers,
             bidirectional=False,
             batch_first=True,
         )
 
         self.linear_projection = LinearWithActivation(
-            config.decoder_rnn_dim * self.n_frames_per_step + attention_out_dim,
+            config.decoder_rnn_dim + attention_out_dim,
             n_mel_channels * self.n_frames_per_step,
         )
 
