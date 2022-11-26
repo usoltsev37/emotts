@@ -68,3 +68,8 @@ python src/preprocessing/mfa_postprocessing.py --input-dir $OUTPUT_DIR/processed
 echo -e "\n10. Compute pitch, mels, energy, duration for fastspeech2"
 
 python src/preprocessing/enrgy_mel_pitch_for_fastspeech2.py --input-audio-dir $OUTPUT_DIR/processed/esd/$language/resampled --input-textgrid-dir $OUTPUT_DIR/processed/esd/$language/mfa_outputs  --output-dir $OUTPUT_DIR/processed/esd/$language/fastspeech2 --audio-ext wav
+
+
+gdown --fuzzy  https://drive.google.com/file/d/1q8mEGwCkFy23KZsinbuvdKAQLqNKbYf1/view?usp=sharing -O models/encoder.pt
+echo -e "\n11. Compute embeddings"
+python src/preprocessing/generate_speaker_embegigs.py --input-dir $OUTPUT_DIR/processed/esd/$language/resampled --output-dir $OUTPUT_DIR/processed/esd/$language/embeddings  --audio-ext wav --model-path models/encoder.pt
