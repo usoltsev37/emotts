@@ -37,7 +37,6 @@ from src.models.feature_models.loss_function import NonAttentiveTacotronLoss
 from src.models.hifi_gan.models import Generator, load_model as load_hifi
 from src.train_config import TrainParams
 
-GENERATED_PHONEMES = []
 
 class Trainer:
 
@@ -61,11 +60,7 @@ class Trainer:
         self.log_dir = LOG_DIR / self.config.checkpoint_name / FEATURE_CHECKPOINT_NAME
         self.references = list( (REFERENCE_PATH / Path(self.config.lang)).rglob("*.pkl"))
         
-        if self.config.lang == "english":
-            GENERATED_PHONEMES = PHONEMES_ENG
-        elif self.config.lang == "chinese":
-            GENERATED_PHONEMES = PHONEMES_CHI
-            
+
         self.create_dirs()
         self.phonemes_to_id: Dict[str, int] = {}
         self.speakers_to_id: Dict[str, int] = {}
@@ -396,7 +391,7 @@ class Trainer:
                         },
                     )
 
-                if self.iteration_step % self.config.iters_per_checkpoint == 0:
+                if self.iteration_step % self.config.iters_per_checkpoint == 0 or self.iteration_step == 1:
                     self.feature_model.eval()
                     self.validate()
                     self.generate_samples()
@@ -451,10 +446,8 @@ class Trainer:
 
         phonemes = [
             [self.phonemes_to_id.get(p, 0) for p in sequence]
-            for sequence in GENERATED_PHONEMES
+            for sequence in (PHONEMES_ENG if self.config.lang == "english" else PHONEMES_CHI)
         ]
-        audio_folder = self.checkpoint_path / f"{self.iteration_step}"
-        audio_folder.mkdir(exist_ok=True, parents=True)
         with torch.no_grad():
 
             for reference_path in self.references:
@@ -463,7 +456,7 @@ class Trainer:
                     num_phonemes_tensor = torch.IntTensor([len(sequence)])
                     speaker = reference_path.parent.name
                     emo = reference_path.stem
-                    speaker_print_file = SPEAKER_PRINT_DIR / speaker / f"{emo}.npy"
+                    speaker_print_file = SPEAKER_PRINT_DIR / self.config.lang / speaker / f"{emo}.npy"
                     speaker_print_array = np.load(str(speaker_print_file))
                     speaker_print_tensor = torch.FloatTensor(
                         speaker_print_array
@@ -478,6 +471,7 @@ class Trainer:
                         speaker_print_tensor.to(self.device),
                         reference.to(self.device).permute(0, 2, 1).float(),
                     )
+                    #print(batch)
                     output = self.feature_model.inference(batch)
                     output = output.permute(0, 2, 1).squeeze(0)
                     output = output * self.mels_std.to(self.device) + self.mels_mean.to(

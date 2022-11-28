@@ -11,11 +11,7 @@ import torch.nn.functional as F
 
 from .utils import get_mask_from_lengths, pad
 
-from .config import (
-    VariancePredictorParams,
-    VarianceEmbeddingParams,
-    VarianceAdaptorParams,
-)
+from src.models.fastspeech2.config import VariancePredictorParams, VarianceAdaptorParams
 
 class VarianceAdaptor(nn.Module):
     """Variance Adaptor"""

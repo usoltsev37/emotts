@@ -87,7 +87,7 @@ class Trainer:
         self.pitch_std = self.train_loader.dataset.pitch_std
         self.pitch_min = self.train_loader.dataset.pitch_min
         self.pitch_max = self.train_loader.dataset.pitch_max
-
+        
 
         self.fastspeech2_model = FastSpeech2(
             config=self.config.fastspeech2,
@@ -99,7 +99,8 @@ class Trainer:
             energy_min=self.energy_min,
             energy_max=self.energy_max,
             gst_config=self.config.gst_config,
-            finetune=self.config.finetune
+            finetune=self.config.finetune,
+            variance_adaptor=self.config.variance_adapter_params,
         ).to(self.device)
 
         if self.config.finetune:

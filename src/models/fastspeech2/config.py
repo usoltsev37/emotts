@@ -1,8 +1,7 @@
 from dataclasses import dataclass, field
 from typing import List, Literal
-from src.models.feature_models.config import GSTParams
 
-@dataclass
+
 
 @dataclass
 class DecoderParams:
@@ -38,7 +37,7 @@ class VarianceEmbeddingParams:
     n_bins: int = field(default=256)
     pitch_quantization: Literal['linear', 'log'] = 'linear'
     energy_quantization: Literal['linear', 'log'] = 'linear' # support 'linear' or 'log', 'log' is allowed only if the energy values are not normalized during preprocessing
-
+    
 
 @dataclass
 class VarianceAdaptorParams:
@@ -52,7 +51,6 @@ class FastSpeech2Params:
 
     encoder_params: EncoderParams
     decoder_params: DecoderParams
-    variance_adapter_params: VarianceAdaptorParams
     max_seq_len: int = field(default=1000)
     use_gst: bool = field(default=False)
 

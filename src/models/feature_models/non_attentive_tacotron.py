@@ -6,9 +6,11 @@ import torch
 from torch import nn
 from torch.distributions import Normal
 from torch.nn import functional as f
+import numpy as np
 
 from src.data_process import RegularBatch
 from src.data_process.voiceprint_dataset import VoicePrintBatch
+from src.data_process.voiceprint_variance_adaptor_dataset import VoicePrintVarianceBatch
 
 from .config import (
     DecoderParams,
@@ -23,6 +25,8 @@ from .config import (
 from .gst import GST
 from .layers import Conv1DNorm, LinearWithActivation, PositionalEncoding
 from .utils import get_mask_from_lengths, norm_emb_layer
+
+from src.models.fastspeech2.modules import VariancePredictor, VarianceAdaptorParams
 
 
 class Prenet(nn.Module):
@@ -182,6 +186,7 @@ class Attention(nn.Module):
         mu = duration_cumsum - 0.5 * durations
         ranges = torch.maximum(ranges, self.eps.to(ranges.device))
         distr = Normal(mu, ranges)
+
         t = torch.arange(0, max_duration.item()).view(1, 1, -1).to(ranges.device)
 
         weights: torch.Tensor = f.softmax(distr.log_prob(t), dim=1)
@@ -336,12 +341,14 @@ class Decoder(nn.Module):
         padded_size = (
             math.ceil(y_mels.shape[1] / self.n_frames_per_step) * self.n_frames_per_step
         )
+
         to_get = padded_size - self.n_frames_per_step
         to_pad = padded_size - y_mels.shape[1]
         padding = torch.zeros(batch_size, to_pad, memory.shape[2]).to(memory.device)
         padded_memory = torch.cat([memory, padding], dim=1)
         padded_y_mels = y_mels[:, :to_get, :].reshape(batch_size, -1, mels_view_size)
         padded_y_mels = torch.cat((previous_frame, padded_y_mels), dim=1)
+
         padded_memory = padded_memory.view(
             batch_size, -1, memory.shape[2], self.n_frames_per_step
         )
@@ -603,6 +610,239 @@ class NonAttentiveTacotronVoicePrint(NonAttentiveTacotron):
 
         attented_embeddings = self.attention.inference(embeddings, text_lengths)
 
+        mel_outputs = self.decoder.inference(attented_embeddings)
+        mel_outputs_postnet = self.postnet(mel_outputs.transpose(1, 2))
+        mel_outputs_postnet = mel_outputs + mel_outputs_postnet.transpose(1, 2)
+
+        return mel_outputs_postnet
+
+
+
+class VarianceAdaptor(nn.Module):
+    """Variance Adaptor"""
+
+    def __init__(self, config: VarianceAdaptorParams, pitch_min: float, pitch_max: float, 
+            energy_min: float, energy_max: float, encoder_hidden: int, out_size: int):
+        super(VarianceAdaptor, self).__init__()
+        self.pitch_predictor = VariancePredictor(config.predictor_params, encoder_hidden)
+        self.energy_predictor = VariancePredictor(config.predictor_params, encoder_hidden)
+
+        pitch_quantization = config.embedding_params.pitch_quantization
+        energy_quantization = config.embedding_params.energy_quantization
+        n_bins = config.embedding_params.n_bins
+        assert pitch_quantization in ["linear", "log"]
+        assert energy_quantization in ["linear", "log"]
+
+
+        if pitch_quantization == "log":
+            self.pitch_bins = nn.Parameter(
+                torch.exp(
+                    torch.linspace(np.log(pitch_min), np.log(pitch_max), n_bins - 1)
+                ),
+                requires_grad=False,
+            )
+        else:
+            self.pitch_bins = nn.Parameter(
+                torch.linspace(pitch_min, pitch_max, n_bins - 1),
+                requires_grad=False,
+            )
+        if energy_quantization == "log":
+            self.energy_bins = nn.Parameter(
+                torch.exp(
+                    torch.linspace(np.log(energy_min), np.log(energy_max), n_bins - 1)
+                ),
+                requires_grad=False,
+            )
+        else:
+            self.energy_bins = nn.Parameter(
+                torch.linspace(energy_min, energy_max, n_bins - 1),
+                requires_grad=False,
+            )
+
+        self.pitch_embedding = nn.Embedding(
+            n_bins, out_size
+        )
+        self.energy_embedding = nn.Embedding(
+            n_bins, out_size
+        )
+
+
+    def forward(self, embeddings, src_mask, pitch_target, energy_target):
+
+        prediction_pitch = self.pitch_predictor(embeddings, src_mask)
+        embedding_pitch = self.pitch_embedding(torch.bucketize(pitch_target, self.pitch_bins))
+
+
+        prediction_energy = self.energy_predictor(embeddings, src_mask)
+        embedding_energy = self.energy_embedding(torch.bucketize(energy_target, self.energy_bins))
+
+        return (
+            prediction_pitch,
+            embedding_pitch,
+            prediction_energy,
+            embedding_energy,
+        )
+
+    def inference(self, embeddings, src_mask, p_control=1.0, e_control=1.0):
+        
+        prediction_pitch = self.pitch_predictor(embeddings, src_mask)
+        prediction_pitch = prediction_pitch * p_control
+        embedding_pitch = self.pitch_embedding(
+            torch.bucketize(prediction_pitch, self.pitch_bins)
+        )
+
+        prediction_energy = self.energy_predictor(embeddings, src_mask)
+        prediction_energy = prediction_energy * e_control
+        embedding_energy = self.energy_embedding(
+            torch.bucketize(prediction_energy, self.energy_bins)
+        )
+
+        return embedding_pitch, embedding_energy
+        
+
+
+
+class NonAttentiveTacotronVoicePrintVarianceAdaptor(nn.Module):
+    def __init__(
+        self,
+        n_phonems: int,
+        n_speakers: int,
+        n_mel_channels: int,
+        config: ModelParams,
+        variance_adaptor_config: VarianceAdaptorParams,
+        gst_config: GSTParams,
+        finetune: bool,
+        pitch_min: float, 
+        pitch_max: float, 
+        energy_min: float, 
+        energy_max: float,
+    ):
+        super().__init__()
+
+        full_embedding_dim = (
+            config.phonem_embedding_dim
+            + config.speaker_embedding_dim
+            + gst_config.emb_dim
+        ) * 3 # out variance adaptor
+        self.finetune = finetune
+        self.gst_emb_dim = gst_config.emb_dim
+        self.phonem_embedding = nn.Embedding(
+            n_phonems, config.phonem_embedding_dim, padding_idx=0
+        )
+        self.speaker_embedding = nn.Embedding(
+            n_speakers,
+            config.speaker_embedding_dim,
+        )
+        norm_emb_layer(
+            self.phonem_embedding,
+            n_phonems,
+            config.phonem_embedding_dim,
+        )
+        norm_emb_layer(
+            self.speaker_embedding,
+            n_speakers,
+            config.speaker_embedding_dim,
+        )
+        self.encoder = Encoder(
+            config.phonem_embedding_dim,
+            config.encoder_config,
+        )
+        self.attention = Attention(full_embedding_dim, config.attention_config)
+        self.gst = GST(n_mel_channels=n_mel_channels, config=gst_config)
+
+        self.variance_adaptor = VarianceAdaptor(variance_adaptor_config, pitch_min, pitch_max, 
+            energy_min, energy_max, 
+            config.phonem_embedding_dim + config.speaker_embedding_dim + gst_config.emb_dim, 
+            config.phonem_embedding_dim + config.speaker_embedding_dim + gst_config.emb_dim)
+
+        self.decoder = Decoder(
+            n_mel_channels,
+            config.n_frames_per_step,
+            full_embedding_dim + config.attention_config.positional_dim,
+            config.decoder_config,
+        )
+        self.postnet = Postnet(
+            n_mel_channels,
+            config.postnet_config,
+        )
+
+    def forward(
+        self, batch: VoicePrintVarianceBatch
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+
+        phonem_emb = self.phonem_embedding(batch.phonemes).transpose(1, 2)
+        speaker_emb: torch.Tensor = batch.speaker_embs.unsqueeze(1)
+
+        phonem_emb = self.encoder(phonem_emb, batch.num_phonemes)
+        if self.finetune:
+            gst_emb = self.gst(batch.mels)
+        else:
+            gst_emb = torch.zeros(phonem_emb.shape[0], 1, self.gst_emb_dim).to(
+                batch.mels.device
+            )
+
+        style_emb = torch.cat((gst_emb, speaker_emb), dim=-1)
+        style_emb = torch.repeat_interleave(style_emb, phonem_emb.shape[1], dim=1)
+        embeddings = torch.cat((phonem_emb, style_emb), dim=-1)
+
+        src_masks = get_mask_from_lengths(batch.num_phonemes, batch.num_phonemes.device)
+        prediction_pitch, embedding_pitch, prediction_energy, embedding_energy = self.variance_adaptor(
+            embeddings, 
+            src_masks.to(batch.phonemes.device), 
+            batch.pitches,
+            batch.energies
+        )
+        embeddings = torch.cat((embeddings, embedding_energy, embedding_pitch), dim=-1)
+        durations, attented_embeddings = self.attention(
+            embeddings, batch.num_phonemes, batch.durations
+        )
+        
+        
+        
+        mel_outputs = self.decoder(attented_embeddings, batch.mels)
+        mel_outputs_postnet = self.postnet(mel_outputs.transpose(1, 2))
+        mel_outputs_postnet = mel_outputs + mel_outputs_postnet.transpose(1, 2)
+        mask = get_mask_from_lengths(
+            batch.durations.cumsum(dim=1)[:, -1].long(), device=batch.phonemes.device
+        )
+        mask = mask.unsqueeze(2)
+        mel_outputs_postnet = mel_outputs_postnet * (1 - mask.float())
+        mel_outputs = mel_outputs * (1 - mask.float())
+
+        return (
+            durations,
+            mel_outputs_postnet,
+            mel_outputs,
+            gst_emb.squeeze(1),
+            prediction_pitch,
+            prediction_energy,
+        )
+
+    def inference(
+        self, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+    ) -> torch.Tensor:
+
+        text_inputs, text_lengths, speaker_embs, reference_mel = batch
+        phonem_emb = self.phonem_embedding(text_inputs).transpose(1, 2)
+        speaker_emb = speaker_embs.unsqueeze(1)
+
+        phonem_emb = self.encoder(phonem_emb, text_lengths)
+        if self.finetune:
+            gst_emb = self.gst(reference_mel)
+        else:
+            gst_emb = torch.zeros(phonem_emb.shape[0], 1, self.gst_emb_dim).to(
+                reference_mel.device
+            )
+        style_emb = torch.cat((gst_emb, speaker_emb), dim=-1)
+        style_emb = torch.repeat_interleave(style_emb, phonem_emb.shape[1], dim=1)
+        embeddings = torch.cat((phonem_emb, style_emb), dim=-1)
+        src_masks = get_mask_from_lengths(text_lengths, text_lengths.device)
+        embedding_pitch, embedding_energy = self.variance_adaptor.inference(
+            embeddings, 
+            src_masks.to(text_inputs.device)
+        )
+        embeddings = torch.cat((embeddings, embedding_pitch, embedding_energy), dim=-1)
+        attented_embeddings = self.attention.inference(embeddings, text_lengths)
         mel_outputs = self.decoder.inference(attented_embeddings)
         mel_outputs_postnet = self.postnet(mel_outputs.transpose(1, 2))
         mel_outputs_postnet = mel_outputs + mel_outputs_postnet.transpose(1, 2)

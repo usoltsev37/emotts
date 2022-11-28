@@ -137,7 +137,7 @@ class FastSpeech2Dataset(Dataset[FastSpeech2Sample]):
         mels: torch.Tensor = torch.Tensor(np.load(info.mel_path))
         mels = (mels - self.mels_mean) / self.mels_std
         
-        energy = self.normalize(np.load(info.energy_path), self.energy_mean, self.energy_std)
+        energy = np.load(info.energy_path)
 
         pitch = np.load(info.pitch_path)
 
@@ -200,7 +200,7 @@ class FastSpeech2Factory:
         self.hop_size = hop_size
         self.n_mels = n_mels
         self.finetune = finetune
-        self._mels_dir = Path(config.mels_fastspeech2_dir)
+        self._mels_dir = Path(config.mels_dir)
         self._pitch_dir = Path(config.pitch_dir)
         self._phones_dir = Path(config.phones_dir)
         self._energy_dir = Path(config.energy_dir)
@@ -388,11 +388,9 @@ class FastSpeech2Factory:
         for scalar_path in scalars_path.rglob(f"*{scalar_exts}"):
             if scalar_path.parent.name in REMOVE_SPEAKERS:
                 continue
-            #print(scalar_path)
 
             arr = self._remove_outlier(np.load(scalar_path))
-            #arr = np.load(scalar_path)
-            #print(arr, arr.shape)
+
             if (arr.shape[0] == 0):
                 print(scalar_path)
                 continue
@@ -407,7 +405,6 @@ class FastSpeech2Factory:
         min_value = np.finfo(np.float64).max
         for filename in in_dir.rglob(f"*{scalar_exts}"):
             values = self._remove_outlier(np.load(filename))
-            #values = np.load(filename)
 
             max_value = max(max_value, max(values))
             min_value = min(min_value, min(values))

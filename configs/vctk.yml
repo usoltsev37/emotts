@@ -9,7 +9,7 @@ seed: 42
 batch_size: 16
 grad_clip_thresh: 1.0
 log_steps: 1000
-iters_per_checkpoint: 50000
+iters_per_checkpoint: 15000
 total_iterations: 500001
 finetune: false
 test_size: 0.05
@@ -17,15 +17,14 @@ device: cuda:0
 lang: english
 checkpoint_name: vctk
 data:
-  text_dir: data/esd/mfa_outputs
-  mels_dir: data/esd/mels
-  wav_dir: data/esd/resampled
+  mels_dir: data/fastspeech2/mels
+  wav_dir: data/fastspeech2/resampled
   feature_dir: data/esd/feature_output
-  mels_fastspeech2_dir: data/processed/esd/english/fastspeech2/mels
-  duration_dir: data/processed/esd/english/fastspeech2/duration
-  pitch_dir: data/processed/esd/english/fastspeech2/pitch
-  energy_dir: data/processed/esd/english/fastspeech2/energy
-  phones_dir: data/processed/esd/english/fastspeech2/phones
+  duration_dir: data/fastspeech2/duration
+  pitch_dir: data/fastspeech2/pitch
+  energy_dir: data/fastspeech2/energy
+  phones_dir: data/fastspeech2/phones
+  speaker_emb_dir: data/fastspeech2/embeddings
   ignore_speakers: []
 pretrained_hifi: models/en/hifi
 base_model: models/tacotron
@@ -50,16 +49,17 @@ fastspeech2:
     decoder_head: 2
     decoder_hidden: 256
     decoder_dropout: 0.2
-  variance_adapter_params:
-    predictor_params:
-      filter_size: 256
-      kernel_size: 3
-      dropout: 0.5
-    embedding_params:
-      n_bins: 256
-      pitch_quantization: linear
-      energy_quantization: linear
   max_seq_len: 1000
+
+variance_adapter_params:
+  predictor_params:
+    filter_size: 256
+    kernel_size: 3
+    dropout: 0.5
+  embedding_params:
+    n_bins: 256
+    pitch_quantization: linear
+    energy_quantization: linear
 
 train_hifi:
   split_data: true

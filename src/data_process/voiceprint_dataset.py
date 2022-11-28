@@ -32,11 +32,12 @@ class VoicePrintSample:
 @dataclass
 class VoicePrintInfo:
 
-    text_path: Path
     mel_path: Path
     speaker_path: Path
     speaker_id: int
     phonemes_length: int
+    duration_path: Path
+    phonemes_path: Path
 
 
 @dataclass
@@ -74,32 +75,19 @@ class VoicePrintDataset(Dataset[VoicePrintSample]):
     def __getitem__(self, idx: int) -> VoicePrintSample:
 
         info = self._dataset[idx]
-        text_grid = tgt.read_textgrid(info.text_path)
-        phones_tier = text_grid.get_tier_by_name(PHONES_TIER)
         phoneme_ids = [
-            self._phoneme_to_id[x.text] for x in phones_tier.get_copy_with_gaps_filled()
+            self._phoneme_to_id[phoneme] for phoneme in open(info.phonemes_path).read().split(" ")
         ]
 
-        durations = np.array(
-            [
-                self.seconds_to_frame(x.duration())
-                for x in phones_tier.get_copy_with_gaps_filled()
-            ],
-            dtype=np.float32,
-        )
+        durations = np.load(info.duration_path)
 
-        mels: torch.Tensor = torch.load(info.mel_path)
+        mels: torch.Tensor = torch.Tensor(np.load(info.mel_path)).unsqueeze(0)
         mels = (mels - self.mels_mean) / self.mels_std
+        
         speaker_embs: np.ndarray = np.load(str(info.speaker_path))
         speaker_embs_tensor = torch.from_numpy(speaker_embs)
 
-        pad_size = mels.shape[-1] - np.int64(durations.sum())
-        if pad_size < 0:
-            durations[-1] += pad_size
-            assert durations[-1] >= 0
-        if pad_size > 0:
-            phoneme_ids.append(self._phoneme_to_id[PAD_TOKEN])
-            np.append(durations, pad_size)
+
 
         return VoicePrintSample(
             phonemes=phoneme_ids,
@@ -110,8 +98,6 @@ class VoicePrintDataset(Dataset[VoicePrintSample]):
             durations=durations,
         )
 
-    def seconds_to_frame(self, seconds: float) -> float:
-        return seconds * self.sample_rate / self.hop_size
 
 
 class VoicePrintFactory:
@@ -134,9 +120,10 @@ class VoicePrintFactory:
         self.n_mels = n_mels
         self.finetune = finetune
         self._mels_dir = Path(config.mels_dir)
-        self._text_dir = Path(config.text_dir)
+        self._duration_dir = Path(config.duration_dir)
+        self._phonemes_dir = Path(config.phones_dir)
+        self._phones_ext = config.phones_ext
         self._speaker_emb_dir = Path(config.speaker_emb_dir)
-        self._text_ext = config.text_ext
         self._mels_ext = config.mels_ext
         self.phoneme_to_id: Dict[str, int] = phonemes_to_id
         self.speaker_to_id: Dict[str, int] = speakers_to_id
@@ -202,10 +189,7 @@ class VoicePrintFactory:
     def _build_dataset(self) -> List[VoicePrintInfo]:
 
         dataset: List[VoicePrintInfo] = []
-        texts_set = {
-            Path(x.parent.name) / x.stem
-            for x in self._text_dir.rglob(f"*{self._text_ext}")
-        }
+
         mels_set = {
             Path(x.parent.name) / x.stem
             for x in self._mels_dir.rglob(f"*{self._mels_ext}")
@@ -214,32 +198,43 @@ class VoicePrintFactory:
             Path(x.parent.name) / x.stem
             for x in self._speaker_emb_dir.rglob(f"*{self._speaker_emb_ext}")
         }
-        samples = list(mels_set & texts_set & speaker_emb_set)
+        duration_set = {
+            Path(x.parent.name) / x.stem
+            for x in self._duration_dir.rglob(f"*{self._mels_ext}")
+        }
+        phones_set = {
+            Path(x.parent.name) / x.stem
+            for x in self._phonemes_dir.rglob(f"*{self._phones_ext}")
+        }
+        
+        samples = list(mels_set & duration_set & speaker_emb_set & phones_set)
         for sample in tqdm(samples):
             if sample.parent.name in REMOVE_SPEAKERS:
                 continue
 
-            tg_path = (self._text_dir / sample).with_suffix(self._text_ext)
+            duration_path = (self._duration_dir / sample).with_suffix(self._mels_ext)
+            phonemes_path = (self._phonemes_dir / sample).with_suffix(self._phones_ext)
+
             mels_path = (self._mels_dir / sample).with_suffix(self._mels_ext)
             speaker_emb_path = (self._speaker_emb_dir / sample).with_suffix(self._speaker_emb_ext)
 
-            text_grid = tgt.read_textgrid(tg_path)
+            phonemes = open(phonemes_path).read().split(" ")
+
             self.add_to_mapping(self.speaker_to_id, sample.parent.name)
             speaker_id = self.speaker_to_id[sample.parent.name]
-
-            if PHONES_TIER in text_grid.get_tier_names():
-
-                phones_tier = text_grid.get_tier_by_name(PHONES_TIER)
-                phonemes = [x.text for x in phones_tier.get_copy_with_gaps_filled()]
+            
+            if len(phonemes) > 0:
 
                 for phoneme in phonemes:
                     self.add_to_mapping(self.phoneme_to_id, phoneme)
+
 
                 if sample.parent.name in self.speaker_to_use:
 
                     dataset.append(
                         VoicePrintInfo(
-                            text_path=tg_path,
+                            phonemes_path=phonemes_path,
+                            duration_path=duration_path,
                             mel_path=mels_path,
                             phonemes_length=len(phonemes),
                             speaker_id=speaker_id,
@@ -257,7 +252,7 @@ class VoicePrintFactory:
         for mel_path in self._mels_dir.rglob(f"*{self._mels_ext}"):
             if mel_path.parent.name in REMOVE_SPEAKERS:
                 continue
-            mels: torch.Tensor = torch.load(mel_path)
+            mels: torch.Tensor = torch.Tensor(np.load(mel_path))
             mel_sum += mels.sum(dim=-1).squeeze(0)
             mel_squared_sum += (mels ** 2).sum(dim=-1).squeeze(0)
             counts += mels.shape[-1]

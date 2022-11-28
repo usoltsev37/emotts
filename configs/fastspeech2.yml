@@ -13,15 +13,13 @@ iters_per_checkpoint: 50000
 total_iterations: 800001
 finetune: false
 test_size: 0.05
-device: cuda:1
+device: cuda:0
 lang: english
 checkpoint_name: vctk_esd_without_gst
 data:
-  text_dir: data/esd/mfa_outputs
-  mels_dir: data/esd/mels
-  wav_dir: data/esd/resampled
+  mels_dir: data/fastspeech2/mels
+  wav_dir: data/fastspeech2/resampled
   feature_dir: data/fastspeech2/feature_output
-  mels_fastspeech2_dir: data/fastspeech2/mels
   duration_dir: data/fastspeech2/duration
   pitch_dir: data/fastspeech2/pitch
   energy_dir: data/fastspeech2/energy
@@ -67,16 +65,17 @@ fastspeech2:
     decoder_head: 2
     decoder_hidden: 256
     decoder_dropout: 0.2
-  variance_adapter_params:
-    predictor_params:
-      filter_size: 256
-      kernel_size: 3
-      dropout: 0.5
-    embedding_params:
-      n_bins: 256
-      pitch_quantization: linear
-      energy_quantization: linear
   max_seq_len: 1000
+
+variance_adapter_params:
+  predictor_params:
+    filter_size: 256
+    kernel_size: 3
+    dropout: 0.5
+  embedding_params:
+    n_bins: 256
+    pitch_quantization: linear
+    energy_quantization: linear
 
 
 train_hifi:

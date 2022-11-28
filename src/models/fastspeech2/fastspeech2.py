@@ -14,9 +14,7 @@ from typing import List, Tuple
 from src.data_process.fastspeech2_dataset import FastSpeech2Batch
 from src.models.feature_models.gst import GST
 from src.models.feature_models.config import GSTParams
-from .config import (
-    FastSpeech2Params,
-)
+from .config import FastSpeech2Params, VarianceAdaptorParams
 
 
 
@@ -25,7 +23,7 @@ class FastSpeech2(nn.Module):
 
     def __init__(self, config: FastSpeech2Params, n_mel_channels: int,
             n_phonems: int, n_speakers: int, pitch_min: float, pitch_max: float, 
-            energy_min: float, energy_max: float, gst_config: GSTParams, finetune: bool):
+            energy_min: float, energy_max: float, gst_config: GSTParams, finetune: bool, variance_adaptor: VarianceAdaptorParams):
         super(FastSpeech2, self).__init__()
         self.model_config = config
         self.gst_emb_dim = gst_config.emb_dim
@@ -37,7 +35,7 @@ class FastSpeech2(nn.Module):
 
         self.gst = GST(n_mel_channels=n_mel_channels, config=gst_config)
         
-        self.variance_adaptor = VarianceAdaptor(config.variance_adapter_params, pitch_min, pitch_max, 
+        self.variance_adaptor = VarianceAdaptor(variance_adaptor, pitch_min, pitch_max, 
         energy_min, energy_max, config.encoder_params.encoder_hidden)
         
         self.decoder = Decoder(config.decoder_params, config.max_seq_len)
@@ -83,9 +81,7 @@ class FastSpeech2(nn.Module):
 
         if self.use_gst:
             output += gst_emb
-        
         output = output + speaker_emb
-
         (
             output,
             p_predictions,

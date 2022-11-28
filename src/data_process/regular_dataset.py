@@ -31,10 +31,11 @@ class RegularSample:
 @dataclass
 class RegularInfo:
 
-    text_path: Path
     mel_path: Path
     speaker_id: int
     phonemes_length: int
+    duration_path: Path
+    phonemes_path: Path
 
 
 @dataclass
@@ -71,30 +72,15 @@ class RegularDataset(Dataset[RegularSample]):
     def __getitem__(self, idx: int) -> RegularSample:
 
         info = self._dataset[idx]
-        text_grid = tgt.read_textgrid(info.text_path)
-        phones_tier = text_grid.get_tier_by_name(PHONES_TIER)
         phoneme_ids = [
-            self._phoneme_to_id[x.text] for x in phones_tier.get_copy_with_gaps_filled()
+            self._phoneme_to_id[phoneme] for phoneme in open(info.phonemes_path).read().split(" ")
         ]
 
-        durations = np.array(
-            [
-                self.seconds_to_frame(x.duration())
-                for x in phones_tier.get_copy_with_gaps_filled()
-            ],
-            dtype=np.float32,
-        )
+        durations = np.load(info.duration_path)
 
-        mels: torch.Tensor = torch.load(info.mel_path)
+        mels: torch.Tensor = torch.Tensor(np.load(info.mel_path)).unsqueeze(0)
         mels = (mels - self.mels_mean) / self.mels_std
 
-        pad_size = mels.shape[-1] - np.int64(durations.sum())
-        if pad_size < 0:
-            durations[-1] += pad_size
-            assert durations[-1] >= 0
-        if pad_size > 0:
-            phoneme_ids.append(self._phoneme_to_id[PAD_TOKEN])
-            np.append(durations, pad_size)
 
         return RegularSample(
             phonemes=phoneme_ids,
@@ -103,9 +89,6 @@ class RegularDataset(Dataset[RegularSample]):
             mels=mels,
             durations=durations,
         )
-
-    def seconds_to_frame(self, seconds: float) -> float:
-        return seconds * self.sample_rate / self.hop_size
 
 
 class RegularFactory:
@@ -152,8 +135,9 @@ class RegularFactory:
         self.n_mels = n_mels
         self.finetune = finetune
         self._mels_dir = Path(config.mels_dir)
-        self._text_dir = Path(config.text_dir)
-        self._text_ext = config.text_ext
+        self._duration_dir = Path(config.duration_dir)
+        self._phonemes_dir = Path(config.phones_dir)
+        self._phones_ext = config.phones_ext
         self._mels_ext = config.mels_ext
         self.phoneme_to_id: Dict[str, int] = phonemes_to_id
         self.phoneme_to_id[PAD_TOKEN] = 0
@@ -219,42 +203,49 @@ class RegularFactory:
     def _build_dataset(self) -> List[RegularInfo]:
 
         dataset: List[RegularInfo] = []
-        texts_set = {
-            Path(x.parent.name) / x.stem
-            for x in self._text_dir.rglob(f"*{self._text_ext}")
-        }
+
         mels_set = {
             Path(x.parent.name) / x.stem
             for x in self._mels_dir.rglob(f"*{self._mels_ext}")
         }
-        samples = list(mels_set & texts_set)
+        duration_set = {
+            Path(x.parent.name) / x.stem
+            for x in self._duration_dir.rglob(f"*{self._mels_ext}")
+        }
+        phones_set = {
+            Path(x.parent.name) / x.stem
+            for x in self._phonemes_dir.rglob(f"*{self._phones_ext}")
+        }  
+        samples = list(mels_set & duration_set & phones_set)
         for sample in tqdm(samples):
             if sample.parent.name in REMOVE_SPEAKERS:
                 continue
 
-            tg_path = (self._text_dir / sample).with_suffix(self._text_ext)
+            duration_path = (self._duration_dir / sample).with_suffix(self._mels_ext)
+            phonemes_path = (self._phonemes_dir / sample).with_suffix(self._phones_ext)
+
+            
+            phonemes = open(phonemes_path).read().split(" ")
             mels_path = (self._mels_dir / sample).with_suffix(self._mels_ext)
 
-            text_grid = tgt.read_textgrid(tg_path)
             self.add_to_mapping(self.speaker_to_id, sample.parent.name)
             speaker_id = self.speaker_to_id[sample.parent.name]
 
-            if PHONES_TIER in text_grid.get_tier_names():
-
-                phones_tier = text_grid.get_tier_by_name(PHONES_TIER)
-                phonemes = [x.text for x in phones_tier.get_copy_with_gaps_filled()]
+            if len(phonemes) > 0:
 
                 for phoneme in phonemes:
                     self.add_to_mapping(self.phoneme_to_id, phoneme)
+
 
                 if sample.parent.name in self.speaker_to_use:
 
                     dataset.append(
                         RegularInfo(
-                            text_path=tg_path,
                             mel_path=mels_path,
                             phonemes_length=len(phonemes),
                             speaker_id=speaker_id,
+                            phonemes_path=phonemes_path,
+                            duration_path=duration_path,
                         )
                     )
 
@@ -268,7 +259,7 @@ class RegularFactory:
         for mel_path in self._mels_dir.rglob(f"*{self._mels_ext}"):
             if mel_path.parent.name in REMOVE_SPEAKERS:
                 continue
-            mels: torch.Tensor = torch.load(mel_path)
+            mels: torch.Tensor = torch.Tensor(np.load(mel_path))
             mel_sum += mels.sum(dim=-1).squeeze(0)
             mel_squared_sum += (mels ** 2).sum(dim=-1).squeeze(0)
             counts += mels.shape[-1]

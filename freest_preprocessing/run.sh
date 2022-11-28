@@ -23,8 +23,6 @@ conda activate emotts
 echo -e "\n3. Resampling"
 python src/preprocessing/resampling.py --input-dir $OUTPUT_DIR/processed/freest/no_pause --output-dir $OUTPUT_DIR/processed/freest/resampled --resample-rate 22050 --audio-ext wav
 
-echo -e "\n4. Audio to Mel"
-python src/preprocessing/wav_to_mel.py --input-dir $OUTPUT_DIR/processed/freest/resampled --output-dir $OUTPUT_DIR/processed/freest/mels  --audio-ext wav
 
 [ -d "$OUTPUT_DIR/processed/freest/mfa_inputs/" ] && rm -rf $OUTPUT_DIR/processed/freest/mfa_inputs/
 [ -d "$OUTPUT_DIR/processed/freest/mfa_outputs/" ] && rm -rf $OUTPUT_DIR/processed/freest/mfa_outputs/
@@ -53,7 +51,7 @@ rm -rf temp
 
 echo -e "\n9. MFA Postprocessing"
 # Aggregate mels by speakers
-python src/preprocessing/mfa_postprocessing.py --input-dir $OUTPUT_DIR/processed/freest/mels
+python src/preprocessing/mfa_postprocessing.py --input-dir $OUTPUT_DIR/processed/freest/resampled
 
 echo -e "\n9. Compute pitch, mels, energy, duration for fastspeech2"
 
