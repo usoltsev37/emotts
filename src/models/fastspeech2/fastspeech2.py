@@ -16,6 +16,7 @@ from src.models.feature_models.gst import GST
 from src.models.feature_models.config import GSTParams
 from .config import FastSpeech2Params, VarianceAdaptorParams
 
+from src.data_process.fastspeech2_dataset_voiceprint import FastSpeech2VoicePrintBatch
 
 
 class FastSpeech2(nn.Module):
@@ -63,9 +64,6 @@ class FastSpeech2(nn.Module):
         mel_masks = get_mask_from_lengths(batch.mels_lens, max_mels_lenght, batch.phonemes.device)
 
         output = self.encoder(batch.phonemes, src_masks)
-
-        
-
 
         if self.finetune:
             gst_emb = self.gst(batch.mels)
@@ -146,6 +144,118 @@ class FastSpeech2(nn.Module):
             output += gst_emb
         
         output = output + speaker_emb
+
+        (output, mel_lens, mel_masks) = self.variance_adaptor.inference(output, src_masks, p_control, e_control, d_control)
+
+        output, mel_masks = self.decoder(output, mel_masks)
+        output = self.mel_linear(output)
+
+        postnet_output = self.postnet(output) + output
+
+        return (
+            output,
+            postnet_output,
+            src_masks,
+            mel_masks,
+            num_phonemes,
+            mel_lens,
+        )
+
+
+
+
+class FastSpeech2VoicePrint(FastSpeech2):
+
+
+    def forward(self, batch: FastSpeech2VoicePrintBatch,
+        p_control=1.0,
+        e_control=1.0,
+        d_control=1.0,
+    ):
+        max_phonemes_lenght = torch.max(batch.num_phonemes).item()
+        max_mels_lenght = torch.max(batch.mels_lens).item()
+        src_masks = get_mask_from_lengths(batch.num_phonemes, max_phonemes_lenght, batch.phonemes.device)
+        mel_masks = get_mask_from_lengths(batch.mels_lens, max_mels_lenght, batch.phonemes.device)
+
+        output = self.encoder(batch.phonemes, src_masks)
+
+        if self.finetune:
+            gst_emb = self.gst(batch.mels)
+        else:
+            gst_emb = torch.zeros(output.shape[0], 1, self.gst_emb_dim).to(
+            batch.mels.device
+        )
+        
+
+
+        if self.use_gst:
+            output += gst_emb
+        output = output + batch.speaker_embs.unsqueeze(1).expand(
+            -1, max_phonemes_lenght, -1
+        )
+        (
+            output,
+            p_predictions,
+            e_predictions,
+            log_d_predictions,
+            mel_masks,
+        ) = self.variance_adaptor(
+            output,
+            src_masks,
+            mel_masks,
+            max_mels_lenght,
+            batch.pitches,
+            batch.energies,
+            batch.durations,
+            p_control,
+            e_control,
+            d_control,
+        )
+
+        output, mel_masks = self.decoder(output, mel_masks)
+        output = self.mel_linear(output)
+
+        postnet_output = self.postnet(output) + output
+
+        return (
+            output,
+            postnet_output,
+            p_predictions,
+            e_predictions,
+            log_d_predictions,
+            src_masks,
+            mel_masks,
+            gst_emb.squeeze(1)
+        )
+
+    def inference(self, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+        p_control=1.0,
+        e_control=1.0,
+        d_control=1.0,
+    ):
+    
+        phonemes, num_phonemes, speaker_emb, reference_mel = batch
+        max_phonemes_len = torch.max(num_phonemes).item()
+        src_masks = get_mask_from_lengths(num_phonemes, max_phonemes_len, phonemes.device)
+ 
+        output = self.encoder(phonemes, src_masks)
+
+
+        if self.finetune:
+            gst_emb = self.gst(reference_mel)
+        else:
+            gst_emb = torch.zeros(output.shape[0], 1, self.gst_emb_dim).to(
+            reference_mel.device
+        )
+        
+
+
+        if self.use_gst:
+            output += gst_emb
+        
+        output = output + speaker_emb.unsqueeze(1).expand(
+            -1, max_phonemes_len, -1
+        )
 
         (output, mel_lens, mel_masks) = self.variance_adaptor.inference(output, src_masks, p_control, e_control, d_control)
 
