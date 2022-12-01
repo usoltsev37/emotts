@@ -19,22 +19,14 @@ from src.constants import (
     LOG_DIR,
     MELS_MEAN_FILENAME,
     MELS_STD_FILENAME,
-    ENERGY_MEAN_FILENAME,
-    ENERGY_STD_FILENAME,
-    ENERGY_MIN_FILENAME,
-    ENERGY_MAX_FILENAME,
-    PITCH_MEAN_FILENAME,
-    PITCH_STD_FILENAME,
-    PITCH_MIN_FILENAME,
-    PITCH_MAX_FILENAME,
     PHONEMES_FILENAME,
     REFERENCE_PATH,
     SPEAKERS_FILENAME,
     SPEAKER_PRINT_DIR,
 )
 from src.data_process.fastspeech2_dataset_voiceprint import FastSpeech2VoicePrintBatch, FastSpeech2VoicePrintCollate, FastSpeech2VoicePrintFactory
-from src.models.fastspeech2.fastspeech2 import FastSpeech2VoicePrint
-from src.models.fastspeech2.loss import FastSpeech2VoicePrintLoss
+from src.models.fastspeech2.fastspeech2 import FastSpeech2Dutaion
+from src.models.fastspeech2.loss import FastSpeech2DurationLoss
 from src.models.hifi_gan.models import Generator, load_model as load_hifi
 from src.train_config import TrainParams
 
@@ -79,26 +71,14 @@ class Trainer:
         self.mels_mean = self.train_loader.dataset.mels_mean
         self.mels_std = self.train_loader.dataset.mels_std
         
-        self.energy_mean = self.train_loader.dataset.energy_mean
-        self.energy_std = self.train_loader.dataset.energy_std
-        self.energy_min = self.train_loader.dataset.energy_min
-        self.energy_max = self.train_loader.dataset.energy_max
 
-        self.pitch_mean = self.train_loader.dataset.pitch_mean
-        self.pitch_std = self.train_loader.dataset.pitch_std
-        self.pitch_min = self.train_loader.dataset.pitch_min
-        self.pitch_max = self.train_loader.dataset.pitch_max
         
 
-        self.fastspeech2_model = FastSpeech2VoicePrint(
+        self.fastspeech2_model = FastSpeech2Dutaion(
             config=self.config.fastspeech2,
             n_mel_channels=self.config.n_mels,
             n_phonems=len(self.phonemes_to_id),
             n_speakers=len(self.speakers_to_id),
-            pitch_min=self.pitch_min,
-            pitch_max=self.pitch_max,
-            energy_min=self.energy_min,
-            energy_max=self.energy_max,
             gst_config=self.config.gst_config,
             finetune=self.config.finetune,
             variance_adaptor=self.config.variance_adapter_params,
@@ -115,15 +95,6 @@ class Trainer:
             self.mels_mean = torch.load(mapping_folder / MELS_MEAN_FILENAME)
             self.mels_std = torch.load(mapping_folder / MELS_STD_FILENAME)
             
-            self.energy_mean = torch.load(mapping_folder / ENERGY_MEAN_FILENAME)
-            self.energy_std = torch.load(mapping_folder / ENERGY_STD_FILENAME)
-            self.energy_min = torch.load(mapping_folder / ENERGY_MIN_FILENAME)
-            self.energy_max = torch.load(mapping_folder / ENERGY_MAX_FILENAME)
-            
-            self.pitch_mean = torch.load(mapping_folder / PITCH_MEAN_FILENAME)
-            self.pitch_std = torch.load(mapping_folder / PITCH_STD_FILENAME)
-            self.pitch_min = torch.load(mapping_folder / PITCH_MIN_FILENAME)
-            self.pitch_max = torch.load(mapping_folder / PITCH_MAX_FILENAME)
         
         if self.use_gst:
 
@@ -172,7 +143,7 @@ class Trainer:
         )
 
 
-        self.criterion = FastSpeech2VoicePrintLoss()
+        self.criterion = FastSpeech2DurationLoss()
 
 
         self.upload_checkpoints()
@@ -239,7 +210,7 @@ class Trainer:
     def upload_checkpoints(self) -> None:
         if self.checkpoint_is_exist():
             model_path = self.get_last_model()
-            self.fastspeech2_model: FastSpeech2VoicePrint = torch.load(
+            self.fastspeech2_model: FastSpeech2Dutaion = torch.load(
                 model_path, map_location=self.device
             )
 
@@ -302,15 +273,6 @@ class Trainer:
         torch.save(self.mels_mean, self.checkpoint_path / MELS_MEAN_FILENAME)
         torch.save(self.mels_std, self.checkpoint_path / MELS_STD_FILENAME)
 
-        torch.save(self.energy_mean, self.checkpoint_path / ENERGY_MEAN_FILENAME)
-        torch.save(self.energy_std, self.checkpoint_path / ENERGY_STD_FILENAME)
-        torch.save(self.energy_min, self.checkpoint_path / ENERGY_MIN_FILENAME)
-        torch.save(self.energy_max, self.checkpoint_path / ENERGY_MAX_FILENAME)
-
-        torch.save(self.pitch_mean, self.checkpoint_path / PITCH_MEAN_FILENAME)
-        torch.save(self.pitch_std, self.checkpoint_path / PITCH_STD_FILENAME)
-        torch.save(self.pitch_min, self.checkpoint_path / PITCH_MIN_FILENAME)
-        torch.save(self.pitch_max, self.checkpoint_path / PITCH_MAX_FILENAME)
 
 
     def prepare_loaders(self) -> Tuple[DataLoader[FastSpeech2VoicePrintBatch], DataLoader[FastSpeech2VoicePrintBatch]]:
@@ -394,19 +356,15 @@ class Trainer:
                 (
                     mel_predictions,
                     postnet_mel_predictions,
-                    pitch_predictions,
-                    energy_predictions,
                     log_duration_predictions,
                     src_masks,
                     mel_masks,
                     gst_emb
                 ) = self.fastspeech2_model(batch)
                 
-                total_loss, mel_loss, postnet_mel_loss, pitch_loss, energy_loss, duration_loss  = self.criterion(batch, 
+                total_loss, mel_loss, postnet_mel_loss, duration_loss  = self.criterion(batch, 
                     mel_predictions,
                     postnet_mel_predictions,
-                    pitch_predictions,
-                    energy_predictions,
                     log_duration_predictions,
                     src_masks,
                     mel_masks
@@ -446,8 +404,6 @@ class Trainer:
                                 "total": total_loss,
                                 "mel_loss": mel_loss,
                                 "postnet_mel_loss": postnet_mel_loss,
-                                "pitch_loss": pitch_loss,
-                                "energy_loss": energy_loss,
                                 "duration_loss": duration_loss,
                                 "generator": loss_generator,
                                 "discriminator": loss_discriminator
@@ -460,8 +416,6 @@ class Trainer:
                                 "total": total_loss,
                                 "mel_loss": mel_loss,
                                 "postnet_mel_loss": postnet_mel_loss,
-                                "pitch_loss": pitch_loss,
-                                "energy_loss": energy_loss,
                                 "duration_loss": duration_loss
                             }
                         )                        
@@ -484,27 +438,21 @@ class Trainer:
             val_loss = 0.0
             val_mel_loss = 0.0
             val_postnet_mel_loss = 0.0
-            val_pitch_loss = 0.0
-            val_energy_loss = 0.0
             val_duration_loss = 0.0
             for batch in self.valid_loader:
                 batch = self.batch_to_device(batch)
                 (
                     mel_predictions,
                     postnet_mel_predictions,
-                    pitch_predictions,
-                    energy_predictions,
                     log_duration_predictions,
                     src_masks,
                     mel_masks,
                     _
                 ) = self.fastspeech2_model(batch)
                 
-                total_loss, mel_loss, postnet_mel_loss, pitch_loss, energy_loss, duration_loss  = self.criterion(batch, 
+                total_loss, mel_loss, postnet_mel_loss, duration_loss  = self.criterion(batch, 
                     mel_predictions,
                     postnet_mel_predictions,
-                    pitch_predictions,
-                    energy_predictions,
                     log_duration_predictions,
                     src_masks,
                     mel_masks
@@ -513,15 +461,11 @@ class Trainer:
                 val_loss += total_loss.item()
                 val_mel_loss += mel_loss.item()
                 val_postnet_mel_loss += postnet_mel_loss.item()
-                val_pitch_loss += pitch_loss.item()
-                val_energy_loss += energy_loss.item()
                 val_duration_loss += duration_loss.item()
 
             val_loss = val_loss / len(self.valid_loader)
             val_mel_loss = val_mel_loss / len(self.valid_loader)
             val_postnet_mel_loss = val_postnet_mel_loss / len(self.valid_loader)
-            val_pitch_loss = val_pitch_loss / len(self.valid_loader)
-            val_energy_loss = val_energy_loss / len(self.valid_loader)
             val_duration_loss = val_duration_loss / len(self.valid_loader)
 
             self.write_losses(
@@ -530,8 +474,6 @@ class Trainer:
                     "total": val_loss,
                     "mel_loss": val_mel_loss,
                     "postnet_mel_loss": val_postnet_mel_loss,
-                    "pitch_loss": val_pitch_loss,
-                    "energy_loss": val_energy_loss,
                     "duration_loss": val_duration_loss,
                 }
             )

@@ -7,7 +7,7 @@ import torch.nn.functional as F
 
 from src.models.fastspeech2.transformer.Models import Encoder, Decoder
 from src.models.fastspeech2.transformer.Layers import PostNet
-from .modules import VarianceAdaptor
+from .modules import VarianceAdaptor, LengthRegulator, VariancePredictor
 from .utils import get_mask_from_lengths
 from typing import List, Tuple
 
@@ -271,4 +271,128 @@ class FastSpeech2VoicePrint(FastSpeech2):
             mel_masks,
             num_phonemes,
             mel_lens,
+        )
+
+
+
+
+
+class FastSpeech2Dutaion(nn.Module):
+    """ FastSpeech2 """
+
+    def __init__(self, config: FastSpeech2Params, n_mel_channels: int,
+            n_phonems: int, n_speakers: int, gst_config: GSTParams, finetune: bool, variance_adaptor: VarianceAdaptorParams):
+        super(FastSpeech2Dutaion, self).__init__()
+        self.model_config = config
+        self.gst_emb_dim = gst_config.emb_dim
+        self.finetune = finetune
+        self.use_gst = config.use_gst
+        
+        
+        self.duration_predictor = VariancePredictor(variance_adaptor.predictor_params, config.encoder_params.encoder_hidden)
+        self.length_regulator = LengthRegulator()
+
+
+        self.encoder = Encoder(config.encoder_params, config.max_seq_len, n_phonems)
+
+        self.gst = GST(n_mel_channels=n_mel_channels, config=gst_config)
+        
+        
+        self.decoder = Decoder(config.decoder_params, config.max_seq_len)
+        
+        self.mel_linear = nn.Linear(
+            config.decoder_params.decoder_hidden,
+            n_mel_channels,
+        )
+        self.postnet = PostNet()
+
+
+
+    def forward(self, batch: FastSpeech2VoicePrintBatch):
+        max_phonemes_lenght = torch.max(batch.num_phonemes).item()
+        max_mels_lenght = torch.max(batch.mels_lens).item()
+        src_masks = get_mask_from_lengths(batch.num_phonemes, max_phonemes_lenght, batch.phonemes.device)
+        mel_masks = get_mask_from_lengths(batch.mels_lens, max_mels_lenght, batch.phonemes.device)
+
+        output = self.encoder(batch.phonemes, src_masks)
+
+        if self.finetune:
+            gst_emb = self.gst(batch.mels)
+        else:
+            gst_emb = torch.zeros(output.shape[0], 1, self.gst_emb_dim).to(
+            batch.mels.device
+        )
+        
+        
+        output = output + batch.speaker_embs.unsqueeze(1).expand(
+            -1, max_phonemes_lenght, -1
+        )
+
+        if self.use_gst:
+            output += gst_emb
+
+        log_duration_prediction = self.duration_predictor(output, src_masks)
+        output, _ = self.length_regulator(output, batch.durations, max_mels_lenght)
+
+        output, mel_masks = self.decoder(output, mel_masks)
+        output = self.mel_linear(output)
+
+        postnet_output = self.postnet(output) + output
+
+        return (
+            output,
+            postnet_output,
+            log_duration_prediction,
+            src_masks,
+            mel_masks,
+            gst_emb.squeeze(1)
+        )
+
+    def inference(self, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor], d_control=1.0):
+    
+        phonemes, num_phonemes, speaker_emb, reference_mel = batch
+        max_phonemes_len = torch.max(num_phonemes).item()
+        src_masks = get_mask_from_lengths(num_phonemes, max_phonemes_len, phonemes.device)
+ 
+        output = self.encoder(phonemes, src_masks)
+
+
+        if self.finetune:
+            gst_emb = self.gst(reference_mel)
+        else:
+            gst_emb = torch.zeros(output.shape[0], 1, self.gst_emb_dim).to(
+            reference_mel.device
+        )
+        
+
+        output = output + speaker_emb.unsqueeze(1).expand(
+            -1, max_phonemes_len, -1
+        )
+
+
+        if self.use_gst:
+            output += gst_emb
+
+
+        log_duration_prediction = self.duration_predictor(output, src_masks)
+        duration_rounded = torch.clamp(
+            (torch.round(torch.exp(log_duration_prediction) - 1) * d_control),
+            min=0,
+        )
+
+        output, mel_len = self.length_regulator(output, duration_rounded, None)
+        mel_masks = get_mask_from_lengths(mel_len, torch.max(mel_len).item(), mel_len.device)
+
+        output, mel_masks = self.decoder(output, mel_masks)
+        output = self.mel_linear(output)
+
+        postnet_output = self.postnet(output) + output
+
+        return (
+            output,
+            postnet_output,
+            src_masks,
+            mel_masks,
+            num_phonemes,
+            mel_len,
         )

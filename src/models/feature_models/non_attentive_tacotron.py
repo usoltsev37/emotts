@@ -220,7 +220,7 @@ class Attention(nn.Module):
 
         durations = self.duration_predictor(embeddings, input_lengths)
         ranges = self.range_predictor(embeddings, durations, input_lengths)
-
+        print(durations)
         scores = self.calc_scores(durations, ranges)
 
         embeddings_per_duration = torch.matmul(scores.transpose(1, 2), embeddings)
