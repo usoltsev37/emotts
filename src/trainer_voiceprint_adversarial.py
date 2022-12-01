@@ -391,7 +391,7 @@ class Trainer:
                         },
                     )
 
-                if self.iteration_step % self.config.iters_per_checkpoint == 0 or self.iteration_step == 1:
+                if self.iteration_step % self.config.iters_per_checkpoint == 0 or self.iteration_step == 300:
                     self.feature_model.eval()
                     self.validate()
                     self.generate_samples()

@@ -137,9 +137,12 @@ class FastSpeech2Dataset(Dataset[FastSpeech2Sample]):
         mels: torch.Tensor = torch.Tensor(np.load(info.mel_path))
         mels = (mels - self.mels_mean) / self.mels_std
         
-        energy = np.load(info.energy_path)
+        energy = self.normalize(np.load(info.energy_path), self.energy_mean, self.energy_std)
+        
 
         pitch = np.load(info.pitch_path)
+        nonzero_idxs = np.where(pitch != 0)[0]
+        pitch[nonzero_idxs] = np.log(pitch[nonzero_idxs])
 
 
 

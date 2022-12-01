@@ -107,8 +107,12 @@ class VoicePrintVarianceDataset(Dataset[VoicePrintVarianceSample]):
         mels: torch.Tensor = torch.Tensor(np.load(info.mel_path)).unsqueeze(0)
         mels = (mels - self.mels_mean) / self.mels_std
         energy = np.load(info.energy_path)
-
+        nonzero_idxs = np.where(energy != 0)[0]
+        energy[nonzero_idxs] = np.log(energy[nonzero_idxs])
+     
         pitch = np.load(info.pitch_path)
+        nonzero_idxs = np.where(pitch != 0)[0]
+        pitch[nonzero_idxs] = np.log(pitch[nonzero_idxs])
         
         speaker_embs: np.ndarray = np.load(str(info.speaker_path))
         speaker_embs_tensor = torch.from_numpy(speaker_embs)
@@ -171,14 +175,14 @@ class VoicePrintVarianceFactory:
         self.energy_mean, self.energy_std = self._get_mean_and_std_scalar(self._energy_dir, self._mels_ext)
         self.energy_min, self.energy_max = self._get_min_max(self._energy_dir, self._mels_ext, self.energy_mean, self.energy_std)
         
-        self.energy_min = (self.energy_min - self.energy_mean) / self.energy_std
-        self.energy_max = (self.energy_max - self.energy_mean) / self.energy_std
+        #self.energy_min = (self.energy_min - self.energy_mean) / self.energy_std
+        #self.energy_max = (self.energy_max - self.energy_mean) / self.energy_std
         
         self.pitch_mean, self.pitch_std = self._get_mean_and_std_scalar(self._pitch_dir, self._mels_ext)
         self.pitch_min, self.pitch_max = self._get_min_max(self._pitch_dir, self._mels_ext, self.pitch_mean, self.pitch_std)
         
-        self.pitch_min = (self.pitch_min - self.pitch_mean) / self.pitch_std
-        self.pitch_max = (self.pitch_max - self.pitch_mean) / self.pitch_std
+        #self.pitch_min = (self.pitch_min - self.pitch_mean) / self.pitch_std
+        #self.pitch_max = (self.pitch_max - self.pitch_mean) / self.pitch_std
 
     @staticmethod
     def add_to_mapping(mapping: Dict[str, int], token: str) -> None:

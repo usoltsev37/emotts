@@ -9,13 +9,13 @@ seed: 42
 batch_size: 16
 grad_clip_thresh: 1.0
 log_steps: 1000
-iters_per_checkpoint: 15000
+iters_per_checkpoint: 50000
 total_iterations: 500001
 finetune: false
 test_size: 0.05
 device: cuda:0
 lang: english
-checkpoint_name: vctk
+checkpoint_name: vctk_without_voiceprint
 data:
   mels_dir: data/fastspeech2/mels
   wav_dir: data/fastspeech2/resampled
@@ -30,13 +30,13 @@ pretrained_hifi: models/en/hifi
 base_model: models/tacotron
 
 fastspeech2:
-  use_gst: false
+  use_gst: true
   encoder_params:
     conv_filter_size: 1024
     conv_kernel_size:
       - 9
       - 1
-    encoder_layer: 6
+    encoder_layer: 4
     encoder_head: 2
     encoder_hidden: 256
     encoder_dropout: 0.2

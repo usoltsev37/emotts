@@ -91,7 +91,7 @@ class Trainer:
         self.pitch_std = self.train_loader.dataset.pitch_std
         self.pitch_min = self.train_loader.dataset.pitch_min
         self.pitch_max = self.train_loader.dataset.pitch_max
-
+        
         self.feature_model = NonAttentiveTacotronVoicePrintVarianceAdaptor(
             n_mel_channels=self.config.n_mels,
             n_phonems=len(self.phonemes_to_id),
@@ -442,7 +442,7 @@ class Trainer:
                         },
                     )
 
-                if self.iteration_step % self.config.iters_per_checkpoint == 0 or self.iteration_step == 300:
+                if self.iteration_step % self.config.iters_per_checkpoint == 0:
                     self.feature_model.eval()
                     self.validate()
                     self.generate_samples()

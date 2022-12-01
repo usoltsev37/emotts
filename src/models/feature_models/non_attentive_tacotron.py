@@ -723,7 +723,7 @@ class NonAttentiveTacotronVoicePrintVarianceAdaptor(nn.Module):
             config.phonem_embedding_dim
             + config.speaker_embedding_dim
             + gst_config.emb_dim
-        ) * 3 # out variance adaptor
+        ) * 3  - gst_config.emb_dim * 2 # out variance adaptor - 
         self.finetune = finetune
         self.gst_emb_dim = gst_config.emb_dim
         self.phonem_embedding = nn.Embedding(
@@ -752,8 +752,8 @@ class NonAttentiveTacotronVoicePrintVarianceAdaptor(nn.Module):
 
         self.variance_adaptor = VarianceAdaptor(variance_adaptor_config, pitch_min, pitch_max, 
             energy_min, energy_max, 
-            config.phonem_embedding_dim + config.speaker_embedding_dim + gst_config.emb_dim, 
-            config.phonem_embedding_dim + config.speaker_embedding_dim + gst_config.emb_dim)
+            config.phonem_embedding_dim + config.speaker_embedding_dim, 
+            config.phonem_embedding_dim + config.speaker_embedding_dim)
 
         self.decoder = Decoder(
             n_mel_channels,
@@ -783,11 +783,13 @@ class NonAttentiveTacotronVoicePrintVarianceAdaptor(nn.Module):
 
         style_emb = torch.cat((gst_emb, speaker_emb), dim=-1)
         style_emb = torch.repeat_interleave(style_emb, phonem_emb.shape[1], dim=1)
+        style_emb_without_gst = torch.repeat_interleave(speaker_emb, phonem_emb.shape[1], dim=1)
         embeddings = torch.cat((phonem_emb, style_emb), dim=-1)
+        embeddings_for_va = torch.cat((phonem_emb, style_emb_without_gst), dim=-1)
 
         src_masks = get_mask_from_lengths(batch.num_phonemes, batch.num_phonemes.device)
         prediction_pitch, embedding_pitch, prediction_energy, embedding_energy = self.variance_adaptor(
-            embeddings, 
+            embeddings_for_va, 
             src_masks.to(batch.phonemes.device), 
             batch.pitches,
             batch.energies
@@ -835,10 +837,13 @@ class NonAttentiveTacotronVoicePrintVarianceAdaptor(nn.Module):
             )
         style_emb = torch.cat((gst_emb, speaker_emb), dim=-1)
         style_emb = torch.repeat_interleave(style_emb, phonem_emb.shape[1], dim=1)
+        style_emb_without_gst = torch.repeat_interleave(speaker_emb, phonem_emb.shape[1], dim=1)
         embeddings = torch.cat((phonem_emb, style_emb), dim=-1)
+        embeddings_for_va = torch.cat((phonem_emb, style_emb_without_gst), dim=-1)
         src_masks = get_mask_from_lengths(text_lengths, text_lengths.device)
+
         embedding_pitch, embedding_energy = self.variance_adaptor.inference(
-            embeddings, 
+            embeddings_for_va, 
             src_masks.to(text_inputs.device)
         )
         embeddings = torch.cat((embeddings, embedding_pitch, embedding_energy), dim=-1)

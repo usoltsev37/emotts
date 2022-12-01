@@ -140,9 +140,12 @@ class FastSpeech2VoicePrintDataset(Dataset[FastSpeech2VoicePrintSample]):
         mels: torch.Tensor = torch.Tensor(np.load(info.mel_path))
         mels = (mels - self.mels_mean) / self.mels_std
         
-        energy = np.load(info.energy_path)
+
+        energy = self.normalize(np.load(info.energy_path), self.energy_mean, self.energy_std)        
 
         pitch = np.load(info.pitch_path)
+        nonzero_idxs = np.where(pitch != 0)[0]
+        pitch[nonzero_idxs] = np.log(pitch[nonzero_idxs])
 
         speaker_embs: np.ndarray = np.load(str(info.speaker_path))
         speaker_embs_tensor = torch.from_numpy(speaker_embs)
@@ -238,8 +241,8 @@ class FastSpeech2VoicePrintFactory:
         self.pitch_mean, self.pitch_std = self._get_mean_and_std_scalar(self._pitch_dir, self._fastspeech2_ext)
         self.pitch_min, self.pitch_max = self._get_min_max(self._pitch_dir, self._fastspeech2_ext, self.pitch_mean, self.pitch_std)
         
-        self.pitch_min = (self.pitch_min - self.pitch_mean) / self.pitch_std
-        self.pitch_max = (self.pitch_max - self.pitch_mean) / self.pitch_std
+        #self.pitch_min = (self.pitch_min - self.pitch_mean) / self.pitch_std
+        #self.pitch_max = (self.pitch_max - self.pitch_mean) / self.pitch_std
 
     @staticmethod
     def add_to_mapping(mapping: Dict[str, int], token: str) -> None:

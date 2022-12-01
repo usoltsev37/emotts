@@ -142,13 +142,9 @@ def process_utterance(audio_path: Path, textgrid_path: Path,
     mel_spectrogram, energy = Audio.tools.get_mel_from_wav(wav, stft)
     mel_spectrogram = mel_spectrogram[:, : sum(duration_collecton)]
     energy = energy[: sum(duration_collecton)]
-    nonzero_idxs = np.where(energy != 0)[0]
-    energy = np.log(energy[nonzero_idxs])
-
     # perform linear interpolation
     pitch = _convert_to_continuous_f0(pitch)
-    nonzero_idxs = np.where(pitch != 0)[0]
-    pitch[nonzero_idxs] = np.log(pitch[nonzero_idxs])
+
 
     # Phoneme-level average
     pos = 0

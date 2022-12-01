@@ -71,3 +71,4 @@ python src/preprocessing/enrgy_mel_pitch_for_fastspeech2.py --input-audio-dir $O
 gdown --fuzzy  https://drive.google.com/file/d/1q8mEGwCkFy23KZsinbuvdKAQLqNKbYf1/view?usp=sharing -O models/encoder.pt
 echo -e "\n11. Compute embeddings"
 python src/preprocessing/generate_speaker_embegigs.py --input-dir $OUTPUT_DIR/processed/esd/$language/resampled --output-dir $OUTPUT_DIR/processed/esd/$language/embeddings  --audio-ext wav --model-path models/encoder.pt
+
