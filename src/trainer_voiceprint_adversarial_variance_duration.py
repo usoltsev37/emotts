@@ -38,9 +38,7 @@ from src.data_process.voiceprint_variance_adaptor_dataset import (
     VoicePrintVarianceCollate,
     VoicePrintVarianceFactory,
 )
-from src.models.feature_models import (
-    NonAttentiveTacotronVoicePrintVarianceAdaptor,
-)
+from src.models.feature_models import NonAttentiveTacotronVoicePrintVarianceAdaptorU
 from src.models.feature_models.loss_function import NonAttentiveTacotronVarianceAdaptorLoss
 from src.models.hifi_gan.models import Generator, load_model as load_hifi
 from src.train_config import TrainParams
@@ -92,7 +90,7 @@ class Trainer:
         self.pitch_min = self.train_loader.dataset.pitch_min
         self.pitch_max = self.train_loader.dataset.pitch_max
         
-        self.feature_model = NonAttentiveTacotronVoicePrintVarianceAdaptor(
+        self.feature_model = NonAttentiveTacotronVoicePrintVarianceAdaptorU(
             n_mel_channels=self.config.n_mels,
             n_phonems=len(self.phonemes_to_id),
             n_speakers=len(self.speakers_to_id),
@@ -107,7 +105,7 @@ class Trainer:
         ).to(self.device)
 
         if self.config.finetune:
-            self.feature_model: NonAttentiveTacotronVoicePrintVarianceAdaptor = torch.load(
+            self.feature_model: NonAttentiveTacotronVoicePrintVarianceAdaptorU = torch.load(
                 base_model_path / FEATURE_MODEL_FILENAME, map_location=self.device
             )
             self.feature_model.finetune = self.config.finetune
@@ -233,7 +231,7 @@ class Trainer:
     def upload_checkpoints(self) -> None:
         if self.checkpoint_is_exist():
             model_path = self.get_last_model()
-            self.feature_model: NonAttentiveTacotronVoicePrintVarianceAdaptor = torch.load(
+            self.feature_model: NonAttentiveTacotronVoicePrintVarianceAdaptorU = torch.load(
                 model_path, map_location=self.device
             )
             self.discriminator: nn.Module = torch.load(
