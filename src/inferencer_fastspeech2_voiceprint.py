@@ -61,12 +61,8 @@ class Inferencer:
         self.fastspeech2_model: FastSpeech2VoicePrint  = torch.load(
             checkpoint_path / FASTSPEECH2_MODEL_FILENAME, map_location=config.device
         )
-        if isinstance(self.fastspeech2_model.attention.eps, float):
-            self.fastspeech2_model.attention.eps = torch.Tensor([self.fastspeech2_model.attention.eps])
 
 
-    def seconds_to_frame(self, seconds: float) -> float:
-        return seconds * self.sample_rate / self.hop_size
 
     def proceed_data(self) -> None:
         factory = FastSpeech2VoicePrintFactory(
