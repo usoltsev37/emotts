@@ -99,3 +99,55 @@ Output from aligner: alignment + phonetization
 - [06 Aug 2019] [Robust Sequence-to-Sequence Acoustic Modeling with Stepwise Monotonic Attention for Neural TTS](https://arxiv.org/pdf/1906.00672)
 - [23 Oct 2020] [HiFi-GAN: Generative Adversarial Networks for Efficient and High Fidelity Speech Synthesis](https://arxiv.org/pdf/2010.05646)
 - [11 May 2021] [Non-Attentive Tacotron: Robust and Controllable Neural TTS Synthesis Including Unsupervised Duration Modeling](https://arxiv.org/pdf/2010.04301)
+
+## 4. Experiments
+
+### Preprocessing 
+
+#### Preprocessing VCTK
+- Move ```vctk.zip``` file to ```vctk_preprocessing/data/zip/vctk.zip``` and run
+```
+bash vctk_preprocessing/vctk_preprocessing.sh
+```
+
+#### Preprocessing ESD
+- Move ```Emotional Speech Dataset (ESD).zip``` file to ```esd_preprocessing/data/zip/Emotional Speech Dataset (ESD).zip``` and run
+```
+bash esd_preprocessing/esd_preprocessing.sh
+```
+
+#### Merge VCTK and ESD
+- You need to merge ```data/processed/vctk``` and ```data/processed/esd``` in ```data/preprocessed/``` with such subdirectories 
+    - ```data/preprocessed/mels```
+    - ```data/preprocessed/resampled```
+    - ```data/preprocessed/duration ```
+    - ```data/preprocessed/pitch ```
+    - ```data/preprocessed/energy```
+    - ```data/preprocessed/phones ```
+    - ```data/preprocessed/embeddings```
+- Open config file from config/ and set path to data. 
+- Also download hifi and set up ```pretrained_hifi: /path/to/models/hifi```
+
+
+### Training Base Tacotron
+#### Training
+```
+conda env create -f environment.yml
+conda activate emmots
+python train_non_attentive_voiceprint.py --config configs/nat_base/nat_base.yml
+```
+
+#### Change last checkpoint for tuning
+Rename ```checkpoints/nat_base/feature/500000_feature_model.pth``` into 
+```checkpoints/nat_base/feature/feature_model.pth```
+#### Tuning
+- Check ```data``` and ```pretrained_hifi``` in ```nat_base_tune.yml``` (same as in the ```nat_base.yml```)
+```
+python train_non_attentive_voiceprint.py --config configs/nat_base/nat_inflated_tune.yml
+```
+
+### Tensorboard
+```
+tensorboard --logdir logs/
+```
+
