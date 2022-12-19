@@ -2,8 +2,8 @@
 
 ## Basic Architecture
 - feature extractor:
-    - Non-Attentive Tacotron; [NAT repo](https://github.com/Garvit-32/Non-Attentive-Tacotron/);
-    - FastSpeech2; [FastSpeech2 repo](https://github.com/ming024/FastSpeech2);
+    - Non-Attentive Tacotron; implementation based on [NAT repo](https://github.com/Garvit-32/Non-Attentive-Tacotron/);
+    - FastSpeech2; implementation based on [FastSpeech2 repo](https://github.com/ming024/FastSpeech2);
     ```
     Input features: phoneme embedding, style embedding, speaker embedding.
     ```
@@ -15,19 +15,10 @@
     ```
     Input features: 80-dim mel spectral features.
     ```
-
-## Datasets (Multi-speaker)
-- English:
-  - Emotional Speech Dataset;
-  - VCTK;
-- Chinese:
-  - Emotional Speech Dataset;
-  - FreeST;
-- Russian:
-  - Internal Huawei Russian dataset;
+  
 
 ## Data Preprocessing
-1. Pausation cutting with VAD(silero vad);
+1. Pausation cutting with VAD ([Silero VAD](https://github.com/snakers4/silero-vad));
 2. Resampling audio and converting stereo to mono;
 3. Normalization: 
    - converting to lowercase; 
@@ -37,7 +28,7 @@
 4. MFA Alignment (external forced aligner):
    - output in TextGrid format (convert to durations: `npy`-array of durations in seconds / in frames);
 
-5. Feature extraction: pitch, energy, duration, mel-spectrogram(80-dim) and speaker embeddings;
+5. Feature extraction: pitch, energy, duration, mel-spectrogram(80-dim) with Z-normalization and speaker embeddings;
 
 ## Style Encoding
 - GST-based (global style tokens): prosody transfer model;
